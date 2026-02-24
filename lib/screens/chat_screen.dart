@@ -13,6 +13,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
+  final _scrollController = ScrollController();
   List<dynamic> messages = [];
   final SocketService _socketService = SocketService();
   bool _isSending = false;
@@ -27,8 +28,21 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           messages.add(data);
         });
+        _scrollToBottom();
       }
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   void _sendMessage() {
@@ -41,7 +55,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.clear();
 
     Future.delayed(const Duration(milliseconds: 300), () {
-      if (mounted) setState(() => _isSending = false);
+      if (mounted) {
+        setState(() => _isSending = false);
+        _scrollToBottom();
+      }
     });
   }
 
@@ -49,22 +66,47 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Chat Ticket #${widget.ticket.id}'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Chat Ticket #${widget.ticket.id}',
+              style: const TextStyle(fontSize: 16),
+            ),
+            Text(
+              'Status: ${widget.ticket.status}',
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              // bisa tambah refresh dari API kalau perlu
-            },
+            icon: const Icon(Icons.info_outline),
+            onPressed: _showTicketInfo,
           ),
         ],
       ),
+
       body: Column(
         children: [
           Expanded(
             child: messages.isEmpty
-                ? const Center(child: Text('Belum ada pesan. Mulai chat!'))
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.chat_bubble_outline,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 16),
+                        Text('Belum ada pesan. Mulai chat!'),
+                      ],
+                    ),
+                  )
                 : ListView.builder(
+                    controller: _scrollController, // TAMBAH CONTROLLER
                     padding: const EdgeInsets.all(10),
                     itemCount: messages.length,
                     itemBuilder: (ctx, i) {
@@ -77,6 +119,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 5),
                           padding: const EdgeInsets.all(12),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.7,
+                          ),
                           decoration: BoxDecoration(
                             color: isMe ? Colors.blue : Colors.grey[300],
                             borderRadius: BorderRadius.circular(15),
@@ -90,6 +135,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   color: isMe ? Colors.white : Colors.black,
                                 ),
                               ),
+                              const SizedBox(height: 4),
                               Text(
                                 DateTime.parse(
                                   msg['createdAt'],
@@ -106,8 +152,18 @@ class _ChatScreenState extends State<ChatScreen> {
                     },
                   ),
           ),
-          Padding(
+          Container(
             padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.3),
+                  blurRadius: 5,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
             child: Row(
               children: [
                 Expanded(
@@ -116,17 +172,24 @@ class _ChatScreenState extends State<ChatScreen> {
                     decoration: const InputDecoration(
                       hintText: 'Ketik pesan...',
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                     ),
                     onSubmitted: (_) => _sendMessage(),
+                    maxLines: null,
                   ),
                 ),
                 const SizedBox(width: 10),
                 _isSending
                     ? const CircularProgressIndicator(strokeWidth: 2)
-                    : FloatingActionButton(
-                        mini: true,
+                    : IconButton(
+                        icon: const Icon(Icons.send, color: Colors.blue),
                         onPressed: _sendMessage,
-                        child: const Icon(Icons.send),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.blue[50],
+                        ),
                       ),
               ],
             ),
@@ -136,9 +199,38 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  void _showTicketInfo() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Info Ticket'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('ID: #${widget.ticket.id}'),
+            const SizedBox(height: 8),
+            Text('Judul: ${widget.ticket.title}'),
+            const SizedBox(height: 8),
+            Text('Status: ${widget.ticket.status}'),
+            const SizedBox(height: 8),
+            Text('Dibuat: ${widget.ticket.createdAt.substring(0, 10)}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
-    // optional leave room
+    _scrollController.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 }
