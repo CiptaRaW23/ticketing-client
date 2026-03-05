@@ -1,6 +1,15 @@
+// screens/profile_screen.dart
+// FIXED:
+// - Hapus field "No HP" dari EditProfile — tidak ada di server/schema
+// - Pakai ApiService.errorMessage() untuk error yang ramah
+// - Logout bersihkan socket juga
+// - Guard jika user null di _navigateToEditProfile
+// - Edit profile tampilkan data yang sudah ada dengan benar
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import '../models/user.dart';
 import 'login_screen.dart';
 
@@ -12,8 +21,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final ApiService _apiService = ApiService();
-  User? user;
+  final ApiService _api = ApiService();
+  User? _user;
   bool _isLoading = true;
 
   @override
@@ -25,17 +34,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
     try {
-      final userData = await _apiService.getUserProfile();
-      setState(() {
-        user = userData;
-        _isLoading = false;
-      });
+      final userData = await _api.getUserProfile();
+      if (mounted)
+        setState(() {
+          _user = userData;
+          _isLoading = false;
+        });
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal load profile: $e')));
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal load profil: ${ApiService.errorMessage(e)}'),
+          ),
+        );
       }
     }
   }
@@ -54,15 +66,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Logout'),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
 
     if (confirm == true) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      // FIXED: dispose socket saat logout (session berakhir)
+      SocketService().dispose();
+
+      await _api.logout(); // clear SharedPreferences
 
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
@@ -74,15 +88,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _navigateToEditProfile() async {
+    if (_user == null) return; // FIXED: guard
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => EditProfileScreen(user: user!)),
+      MaterialPageRoute(builder: (_) => EditProfileScreen(user: _user!)),
     );
-
-    // Reload data jika ada perubahan
-    if (result == true) {
-      _loadUserData();
-    }
+    if (result == true) _loadUserData();
   }
 
   @override
@@ -91,13 +102,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    if (user == null) {
+    if (_user == null) {
       return Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text('Gagal memuat profile'),
+              Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              const Text('Gagal memuat profil'),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadUserData,
@@ -111,10 +124,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: const Text('Profil'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.edit),
+            tooltip: 'Edit Profil',
             onPressed: _navigateToEditProfile,
           ),
         ],
@@ -123,52 +137,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onRefresh: _loadUserData,
         child: ListView(
           children: [
-            // Header Profile
+            // ── Header ──
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.blue[400]!, Colors.blue[600]!],
+                  colors: [Colors.blue[400]!, Colors.blue[700]!],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
               ),
               child: Column(
                 children: [
-                  const CircleAvatar(
-                    radius: 50,
+                  CircleAvatar(
+                    radius: 48,
                     backgroundColor: Colors.white,
-                    child: Icon(Icons.person, size: 50, color: Colors.blue),
+                    child: Text(
+                      _user!.name.isNotEmpty
+                          ? _user!.name[0].toUpperCase()
+                          : '?',
+                      style: const TextStyle(
+                        fontSize: 36,
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 14),
                   Text(
-                    user!.name,
+                    _user!.name,
                     style: const TextStyle(
-                      fontSize: 24,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 4),
                   Text(
-                    'ID: ${user!.id}',
+                    '@${_user!.username}',
                     style: const TextStyle(fontSize: 14, color: Colors.white70),
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: user!.status == 'active'
-                          ? Colors.green
-                          : Colors.red,
+                      color: _user!.isActive
+                          ? Colors.green[400]
+                          : Colors.red[400],
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      user!.status == 'active' ? 'Aktif' : 'Tidak Aktif',
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      _user!.isActive ? 'Akun Aktif' : 'Akun Nonaktif',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -177,63 +204,100 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             const SizedBox(height: 20),
 
-            // Informasi Akun
+            // ── Info Akun ──
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'Informasi Akun',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _buildInfoTile(Icons.person, 'Username', user!.username),
-            _buildInfoTile(Icons.badge, 'Nama', user!.name),
-            _buildInfoTile(
-              Icons.location_on,
-              'Alamat',
-              user!.address ?? 'Belum diatur',
-            ),
-
-            const SizedBox(height: 20),
-
-            // Logout Button
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: ElevatedButton.icon(
-                onPressed: _logout,
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black54,
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  _buildInfoTile(Icons.person, 'Username', _user!.username),
+                  const Divider(height: 1, indent: 56),
+                  _buildInfoTile(Icons.badge, 'Nama Lengkap', _user!.name),
+                  const Divider(height: 1, indent: 56),
+                  _buildInfoTile(
+                    Icons.location_on,
+                    'Alamat',
+                    _user!.address?.isNotEmpty == true
+                        ? _user!.address!
+                        : 'Belum diatur',
+                    valueColor: _user!.address == null ? Colors.grey : null,
+                  ),
+                ],
+              ),
+            ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
+
+            // ── Logout ──
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: OutlinedButton.icon(
+                onPressed: _logout,
+                icon: const Icon(Icons.logout, color: Colors.red),
+                label: const Text(
+                  'Logout',
+                  style: TextStyle(color: Colors.red, fontSize: 16),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 30),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String label, String value) {
+  Widget _buildInfoTile(
+    IconData icon,
+    String label,
+    String value, {
+    Color? valueColor,
+  }) {
     return ListTile(
       leading: Icon(icon, color: Colors.blue),
-      title: Text(label),
-      subtitle: Text(value),
+      title: Text(
+        label,
+        style: const TextStyle(fontSize: 13, color: Colors.grey),
+      ),
+      subtitle: Text(
+        value,
+        style: TextStyle(
+          fontSize: 15,
+          color: valueColor ?? Colors.black87,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 }
 
 // ============================================
-// HALAMAN EDIT PROFILE BARU
+// EDIT PROFILE SCREEN
 // ============================================
 
 class EditProfileScreen extends StatefulWidget {
   final User user;
-
   const EditProfileScreen({super.key, required this.user});
 
   @override
@@ -241,71 +305,59 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final ApiService _apiService = ApiService();
+  final ApiService _api = ApiService();
   final _formKey = GlobalKey<FormState>();
 
-  late TextEditingController _nameController;
-  late TextEditingController _phoneController;
-  late TextEditingController _addressController;
-  final TextEditingController _oldPassController = TextEditingController();
-  final TextEditingController _newPassController = TextEditingController();
-  final TextEditingController _confirmPassController = TextEditingController();
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _addressCtrl;
+  final TextEditingController _oldPassCtrl = TextEditingController();
+  final TextEditingController _newPassCtrl = TextEditingController();
+  final TextEditingController _confirmPassCtrl = TextEditingController();
 
   bool _isLoading = false;
-  bool _obscureOldPass = true;
-  bool _obscureNewPass = true;
-  bool _obscureConfirmPass = true;
+  bool _obscureOld = true;
+  bool _obscureNew = true;
+  bool _obscureConfirm = true;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.user.name);
-    _phoneController = TextEditingController();
-    _addressController = TextEditingController(text: widget.user.address ?? '');
+    _nameCtrl = TextEditingController(text: widget.user.name);
+    _addressCtrl = TextEditingController(text: widget.user.address ?? '');
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _addressController.dispose();
-    _oldPassController.dispose();
-    _newPassController.dispose();
-    _confirmPassController.dispose();
+    _nameCtrl.dispose();
+    _addressCtrl.dispose();
+    _oldPassCtrl.dispose();
+    _newPassCtrl.dispose();
+    _confirmPassCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
-    final address = _addressController.text.trim();
-    final oldPass = _oldPassController.text;
-    final newPass = _newPassController.text;
-    final confirmPass = _confirmPassController.text;
+    final name = _nameCtrl.text.trim();
+    final address = _addressCtrl.text.trim();
+    final oldPass = _oldPassCtrl.text;
+    final newPass = _newPassCtrl.text;
+    final confirm = _confirmPassCtrl.text;
 
-    // Validasi password jika diisi
     bool changePassword = oldPass.isNotEmpty || newPass.isNotEmpty;
+
     if (changePassword) {
       if (oldPass.isEmpty || newPass.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password lama dan baru harus diisi')),
-        );
+        _showSnackBar('Password lama dan baru harus diisi', isError: true);
         return;
       }
-
-      if (newPass != confirmPass) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password baru tidak cocok')),
-        );
+      if (newPass != confirm) {
+        _showSnackBar('Password baru tidak cocok', isError: true);
         return;
       }
-
       if (newPass.length < 6) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password minimal 6 karakter')),
-        );
+        _showSnackBar('Password minimal 6 karakter', isError: true);
         return;
       }
     }
@@ -313,192 +365,133 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Update profile
-      await _apiService.updateProfile(
+      await _api.updateProfile(
         name: name,
         address: address.isEmpty ? null : address,
       );
 
-      // Ganti password jika diisi
       if (changePassword) {
-        await _apiService.changePassword(
-          oldPassword: oldPass,
-          newPassword: newPass,
-        );
+        await _api.changePassword(oldPassword: oldPass, newPassword: newPass);
       }
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            changePassword
-                ? 'Profile dan password berhasil diupdate'
-                : 'Profile berhasil diupdate',
-          ),
-          backgroundColor: Colors.green,
-        ),
+      _showSnackBar(
+        changePassword
+            ? 'Profil dan password berhasil diupdate'
+            : 'Profil berhasil diupdate',
+        isError: false,
       );
-
-      // Kembali ke halaman profile dengan flag success
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal update: $e'),
-          backgroundColor: Colors.red,
-        ),
+      _showSnackBar(
+        'Gagal update: ${ApiService.errorMessage(e)}',
+        isError: true,
       );
     }
+  }
+
+  void _showSnackBar(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Pengaturan'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Edit Profil')),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Section: Informasi Pribadi
+            // ── Info Pribadi ──
             const Text(
               'Informasi Pribadi',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
 
             TextFormField(
-              controller: _nameController,
+              controller: _nameCtrl,
               decoration: const InputDecoration(
                 labelText: 'Nama Lengkap',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.person),
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Nama tidak boleh kosong';
-                }
-                return null;
-              },
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Nama tidak boleh kosong'
+                  : null,
             ),
             const SizedBox(height: 16),
 
+            // FIXED: Tidak ada field No HP — tidak ada di server
             TextFormField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'No HP',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone),
-                hintText: 'Contoh: 08123456789',
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _addressController,
+              controller: _addressCtrl,
               maxLines: 3,
               decoration: const InputDecoration(
                 labelText: 'Alamat',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.location_on),
                 alignLabelWithHint: true,
+                hintText: 'Masukkan alamat lengkap',
               ),
             ),
 
             const SizedBox(height: 32),
-            const Divider(thickness: 2),
+            const Divider(thickness: 1.5),
             const SizedBox(height: 16),
 
-            // Section: Ganti Password
+            // ── Ganti Password ──
             const Text(
-              'Ganti Password (Opsional)',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              'Ganti Password',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             const Text(
-              'Kosongkan jika tidak ingin mengubah password',
+              'Kosongkan jika tidak ingin ganti password',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 16),
 
-            TextFormField(
-              controller: _oldPassController,
-              obscureText: _obscureOldPass,
-              decoration: InputDecoration(
-                labelText: 'Password Lama',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureOldPass ? Icons.visibility : Icons.visibility_off,
-                  ),
-                  onPressed: () {
-                    setState(() => _obscureOldPass = !_obscureOldPass);
-                  },
-                ),
-              ),
+            _buildPassField(
+              _oldPassCtrl,
+              'Password Lama',
+              _obscureOld,
+              () => setState(() => _obscureOld = !_obscureOld),
             ),
             const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _newPassController,
-              obscureText: _obscureNewPass,
-              decoration: InputDecoration(
-                labelText: 'Password Baru',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureNewPass ? Icons.visibility : Icons.visibility_off,
-                  ),
-                  onPressed: () {
-                    setState(() => _obscureNewPass = !_obscureNewPass);
-                  },
-                ),
-              ),
+            _buildPassField(
+              _newPassCtrl,
+              'Password Baru',
+              _obscureNew,
+              () => setState(() => _obscureNew = !_obscureNew),
             ),
             const SizedBox(height: 16),
-
-            TextFormField(
-              controller: _confirmPassController,
-              obscureText: _obscureConfirmPass,
-              decoration: InputDecoration(
-                labelText: 'Konfirmasi Password Baru',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureConfirmPass
-                        ? Icons.visibility
-                        : Icons.visibility_off,
-                  ),
-                  onPressed: () {
-                    setState(() => _obscureConfirmPass = !_obscureConfirmPass);
-                  },
-                ),
-              ),
+            _buildPassField(
+              _confirmPassCtrl,
+              'Konfirmasi Password Baru',
+              _obscureConfirm,
+              () => setState(() => _obscureConfirm = !_obscureConfirm),
             ),
 
             const SizedBox(height: 32),
 
-            // Tombol Simpan
+            // ── Tombol Simpan ──
             ElevatedButton(
               onPressed: _isLoading ? null : _saveChanges,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               child: _isLoading
                   ? const SizedBox(
@@ -514,9 +507,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       style: TextStyle(fontSize: 16),
                     ),
             ),
-
             const SizedBox(height: 20),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPassField(
+    TextEditingController ctrl,
+    String label,
+    bool obscure,
+    VoidCallback toggleObscure,
+  ) {
+    return TextFormField(
+      controller: ctrl,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.lock),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+          onPressed: toggleObscure,
         ),
       ),
     );

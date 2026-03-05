@@ -1,3 +1,4 @@
+// screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,7 +10,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String userName = 'Customer';
+  String _userName = 'Customer';
 
   @override
   void initState() {
@@ -19,25 +20,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      userName = prefs.getString('userName') ?? 'Customer';
-      // Data mock, nanti bisa diganti dengan API
-    });
+    if (mounted) {
+      setState(() {
+        _userName = prefs.getString('userName') ?? 'Customer';
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: () async {
-          await _loadUserData();
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Data diperbarui')));
-        },
+        onRefresh: _loadUserData,
         child: CustomScrollView(
           slivers: [
-            // Simple App Bar
             SliverAppBar(
               expandedHeight: 70,
               floating: false,
@@ -48,34 +44,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 background: Align(
                   alignment: Alignment.center,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          'Halo, $userName',
+                          'Halo, $_userName 👋',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 20,
                             color: Colors.black87,
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.support_agent,
-                            color: Colors.black87,
-                            size: 30,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Hubungi Customer Service'),
-                              ),
-                            );
-                          },
                         ),
                       ],
                     ),
@@ -83,33 +61,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
-            // Content
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PENGUMUMAN SECTION
-                    _buildAnnouncementBanner(),
-
+                    _buildWelcomeBanner(),
                     const SizedBox(height: 24),
-
-                    // QUICK ACTIONS TITLE
                     const Text(
                       'Menu Cepat',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // 6 QUICK ACTION BUTTONS
                     _buildQuickActionsGrid(),
-
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -121,41 +89,18 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ============================================
-  // PENGUMUMAN BANNER (Static/Permanen)
-  // ============================================
-  Widget _buildAnnouncementBanner() {
-    return _buildAnnouncementCard(
-      icon: Icons.waving_hand,
-      iconColor: Colors.blue,
-      bgGradient: [Colors.blue[50]!, Colors.blue[100]!],
-      title: 'Selamat Datang!',
-      subtitle:
-          'Gunakan menu cepat di bawah untuk mengakses berbagai panduan dan tips internet',
-      date: 'Info',
-    );
-  }
-
-  Widget _buildAnnouncementCard({
-    required IconData icon,
-    required Color iconColor,
-    required List<Color> bgGradient,
-    required String title,
-    required String subtitle,
-    required String date,
-  }) {
+  Widget _buildWelcomeBanner() {
     return Container(
-      margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: bgGradient,
+          colors: [Colors.blue[50]!, Colors.blue[100]!],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: iconColor.withOpacity(0.2),
+            color: Colors.blue.withOpacity(0.15),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -163,59 +108,44 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 24),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    date,
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.waving_hand,
+                color: Colors.blue,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Selamat Datang!',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: iconColor,
+                      color: Colors.blue,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: iconColor.withOpacity(0.9),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Gunakan menu cepat di bawah untuk panduan dan tips internet',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue[800],
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black87,
-                height: 1.3,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -223,52 +153,61 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ============================================
-  // 6 QUICK ACTION BUTTONS (3x2 Grid)
-  // ============================================
   Widget _buildQuickActionsGrid() {
     final actions = [
-      QuickActionItem(
+      _QuickAction(
         icon: Icons.refresh,
         label: 'Panduan\nRestart',
-        description: 'Cara restart router agar koneksi segar kembali',
         color: Colors.indigo,
         gradient: [Colors.indigo[400]!, Colors.indigo[600]!],
+        content: 'Cara Restart Router',
+        detail:
+            '1. Matikan router dengan cabut kabel listrik\n2. Tunggu 30 detik\n3. Colokkan kembali\n4. Tunggu 1-2 menit hingga lampu menyala stabil\n5. Coba koneksi kembali\n\n💡 Restart rutin setiap minggu bisa menjaga performa internet!',
       ),
-      QuickActionItem(
+      _QuickAction(
         icon: Icons.menu_book,
         label: 'Kamus\nNet',
-        description: 'Penjelasan istilah internet dengan bahasa orang awam',
         color: Colors.cyan,
         gradient: [Colors.cyan[400]!, Colors.cyan[600]!],
+        content: 'Istilah Internet',
+        detail:
+            '• Bandwidth: Kapasitas maksimal koneksi internet\n• Latency/Ping: Waktu respons jaringan (semakin kecil semakin baik)\n• Mbps: Megabit per second, satuan kecepatan internet\n• Router: Alat yang memancarkan sinyal WiFi di rumah\n• Modem: Penghubung jaringan ISP ke rumah Anda',
       ),
-      QuickActionItem(
+      _QuickAction(
         icon: Icons.wifi_password,
         label: 'Panduan\nWiFi',
-        description: 'Cara ganti password & posisi router yang benar',
         color: Colors.blue,
         gradient: [Colors.blue[400]!, Colors.blue[600]!],
+        content: 'Cara Ganti Password WiFi',
+        detail:
+            '1. Buka browser, ketik 192.168.1.1\n2. Login dengan admin/admin (atau lihat stiker di router)\n3. Cari menu Wireless > Security\n4. Ubah kolom Password/Key\n5. Gunakan kombinasi huruf + angka minimal 8 karakter\n6. Simpan perubahan & reconnect semua perangkat',
       ),
-      QuickActionItem(
+      _QuickAction(
         icon: Icons.signal_wifi_4_bar,
         label: 'Tips\nSinyal',
-        description: 'Edukasi agar sinyal tidak terhalang benda logam/tembok',
         color: Colors.purple,
         gradient: [Colors.purple[400]!, Colors.purple[600]!],
+        content: 'Tips Memperkuat Sinyal',
+        detail:
+            '• Letakkan router di posisi tengah rumah\n• Hindari dekat microwave, TV, atau tembok tebal\n• Posisi tegak (vertikal) lebih baik\n• Jauhkan dari benda logam dan akuarium\n• Naikkan posisi router (di rak/meja tinggi lebih baik)\n• Pastikan tidak ada banyak dinding/lantai beton di antara router dan perangkat',
       ),
-      QuickActionItem(
+      _QuickAction(
         icon: Icons.help_outline,
         label: 'Panduan\nUmum',
-        description: 'Tutorial lengkap penggunaan internet untuk pemula',
         color: Colors.orange,
         gradient: [Colors.orange[400]!, Colors.orange[600]!],
+        content: 'Panduan Umum Internet',
+        detail:
+            '• Jika internet lambat: coba restart router & modem\n• Jika tidak bisa konek: periksa kabel & lampu router\n• Lampu ONT/Modem harus menyala hijau\n• Jika mati lampu tiba-tiba, router butuh restart setelah listrik nyala\n• Hapus cache browser jika website tidak bisa dibuka\n• Hubungi customer service jika masalah berlanjut >1 jam',
       ),
-      QuickActionItem(
+      _QuickAction(
         icon: Icons.lightbulb_outline,
         label: 'Tips\nHemat',
-        description: 'Cara menghemat kuota dan mengoptimalkan koneksi',
         color: Colors.green,
         gradient: [Colors.green[400]!, Colors.green[600]!],
+        content: 'Tips Hemat Kuota',
+        detail:
+            '• Nonaktifkan update otomatis aplikasi saat menggunakan data seluler\n• Streaming video — pilih resolusi 480p daripada 1080p\n• Gunakan WiFi untuk download file besar\n• Aktifkan Data Saver di browser dan aplikasi\n• Jadwalkan backup otomatis saat WiFi tersambung\n• Matikan sinkronisasi cloud yang tidak penting',
       ),
     ];
 
@@ -282,25 +221,20 @@ class _HomeScreenState extends State<HomeScreen> {
         childAspectRatio: 0.85,
       ),
       itemCount: actions.length,
-      itemBuilder: (ctx, index) {
-        final action = actions[index];
-        return _buildQuickActionButton(action);
-      },
+      itemBuilder: (ctx, i) => _buildActionButton(actions[i]),
     );
   }
 
-  Widget _buildQuickActionButton(QuickActionItem action) {
+  Widget _buildActionButton(_QuickAction action) {
     return InkWell(
-      onTap: () {
-        // Tidak ada aksi untuk demo
-      },
+      onTap: () => _showGuideDialog(action),
       borderRadius: BorderRadius.circular(50),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 70,
-            height: 70,
+            width: 68,
+            height: 68,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -316,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            child: Icon(action.icon, size: 32, color: Colors.white),
+            child: Icon(action.icon, size: 30, color: Colors.white),
           ),
           const SizedBox(height: 8),
           Text(
@@ -325,7 +259,6 @@ class _HomeScreenState extends State<HomeScreen> {
             style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w500,
-              color: Colors.black87,
               height: 1.2,
             ),
           ),
@@ -333,20 +266,58 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  void _showGuideDialog(_QuickAction action) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: action.gradient),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(action.icon, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(action.content, style: const TextStyle(fontSize: 16)),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            action.detail,
+            style: const TextStyle(height: 1.6, fontSize: 13),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class QuickActionItem {
+class _QuickAction {
   final IconData icon;
   final String label;
-  final String description;
   final Color color;
   final List<Color> gradient;
+  final String content;
+  final String detail;
 
-  QuickActionItem({
+  const _QuickAction({
     required this.icon,
     required this.label,
-    required this.description,
     required this.color,
     required this.gradient,
+    required this.content,
+    required this.detail,
   });
 }

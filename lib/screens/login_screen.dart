@@ -1,7 +1,16 @@
+// screens/login_screen.dart
+// FIXED:
+// - Pakai ApiService.login() bukan Dio mentah
+// - Simpan role & address dari response
+// - Error message dari ApiService.errorMessage()
+// - Inisialisasi SocketService setelah login berhasil
+// - Tampil/sembunyikan password
+// - Keyboard handling yang benar (TextInputAction)
+
 import 'package:flutter/material.dart';
-import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/constants.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import 'main_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -14,37 +23,41 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
+  final ApiService _api = ApiService();
+
   bool _isLoading = false;
+  bool _obscurePass = true;
 
   Future<void> _login() async {
     final username = _usernameController.text.trim();
-    final password = _passwordController.text.trim();
+    final password = _passwordController.text;
 
     if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Username dan password wajib diisi')),
-      );
+      _showSnackBar('Username dan password wajib diisi');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final dio = Dio();
-      final response = await dio.post(
-        '$serverUrl/api/login',
-        data: {'username': username, 'password': password},
-      );
+      final data = await _api.login(username, password);
 
-      if (response.data['success']) {
-        final token = response.data['token'];
-        final userName = response.data['user']['name'];
-        final userId = response.data['user']['id'];
+      if (data['success'] == true) {
+        final token = data['token'] as String;
+        final user = data['user'] as Map<String, dynamic>;
+        final userName = user['name'] as String? ?? '';
+        final userId = user['id'] as int? ?? 0;
+        final userRole = user['role'] as String? ?? 'customer';
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', token);
         await prefs.setString('userName', userName);
         await prefs.setInt('userId', userId);
+        await prefs.setString('userRole', userRole);
+
+        // FIXED: Inisialisasi socket setelah login berhasil
+        SocketService().init();
 
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -52,70 +65,144 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (_) => const MainNavigation()),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response.data['error'] ?? 'Login gagal')),
-        );
+        _showSnackBar(data['error']?.toString() ?? 'Login gagal');
       }
-    } on DioException catch (e) {
-      final errorMsg = e.response?.data['error'] ?? 'Gagal terhubung ke server';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(errorMsg)));
+    } catch (e) {
+      _showSnackBar(ApiService.errorMessage(e));
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showSnackBar(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.headset_mic, size: 100, color: Colors.blue),
-              const SizedBox(height: 20),
-              const Text(
-                'Ticketing Keluhan Pelanggan',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 40),
-              TextField(
-                controller: _usernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Username',
-                  hintText: 'misal: ciptangadirejo',
-                  border: OutlineInputBorder(),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(30),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Logo
+                Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.headset_mic,
+                    size: 56,
+                    color: Colors.blue,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 24),
+                const Text(
+                  'Ticketing Keluhan\nPelanggan',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    height: 1.3,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 30),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _login,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 50,
-                          vertical: 15,
-                        ),
+                const SizedBox(height: 8),
+                Text(
+                  'Masuk untuk melihat dan membuat keluhan',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 40),
+
+                // Username
+                TextField(
+                  controller: _usernameController,
+                  keyboardType: TextInputType.text,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                  decoration: InputDecoration(
+                    labelText: 'Username',
+                    hintText: 'Masukkan username',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    prefixIcon: const Icon(Icons.person),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Password
+                TextField(
+                  controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  obscureText: _obscurePass,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _login(),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    prefixIcon: const Icon(Icons.lock),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePass ? Icons.visibility : Icons.visibility_off,
                       ),
-                      child: const Text(
-                        'Masuk',
-                        style: TextStyle(fontSize: 18),
+                      onPressed: () =>
+                          setState(() => _obscurePass = !_obscurePass),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 30),
+
+                // Tombol Login
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _login,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-            ],
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Masuk',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
