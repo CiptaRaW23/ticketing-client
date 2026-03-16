@@ -69,7 +69,7 @@ class _WifiSettingsScreenState extends State<WifiSettingsScreen> {
             const LinearProgressIndicator()
           else
             Container(
-              color: Colors.blue[50],
+              color: Colors.green[50],
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
               child: Row(
                 children: [

@@ -72,13 +72,14 @@ class TicketCard extends StatelessWidget {
                     style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
                   const Spacer(),
-                  // Jumlah pesan
                   if (ticket.messages.isNotEmpty) ...[
-                    Icon(Icons.chat_bubble, size: 13, color: Colors.blue[400]),
+                    // CHANGED: biru → hijau
+                    Icon(Icons.chat_bubble, size: 13, color: Colors.green[400]),
                     const SizedBox(width: 4),
                     Text(
                       '${ticket.messages.length} pesan',
-                      style: TextStyle(fontSize: 12, color: Colors.blue[400]),
+                      // CHANGED: biru → hijau
+                      style: TextStyle(fontSize: 12, color: Colors.green[400]),
                     ),
                     const SizedBox(width: 8),
                   ],
@@ -140,7 +141,7 @@ class TicketCard extends StatelessWidget {
         fg = Colors.amber[800]!;
         icon = Icons.remove;
         break;
-      default: // low
+      default:
         bg = Colors.grey[100]!;
         fg = Colors.grey[600]!;
         icon = Icons.keyboard_double_arrow_down;

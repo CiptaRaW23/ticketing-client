@@ -1,13 +1,4 @@
 // screens/chat_screen.dart
-// FIXED:
-// - onNewMessage listener dibersihkan di dispose() → tidak ada pesan duplikat
-// - Optimistic UI: pesan langsung muncul tanpa menunggu socket echo
-// - Deduplikasi pesan: cek ID sebelum tambah ke list
-// - Tampilkan sender label (Admin/Customer/Bot)
-// - Status ticket ditampilkan dengan warna
-// - Input disabled jika ticket sudah closed
-// - Refresh ticket detail saat kembali ke screen
-
 import 'package:flutter/material.dart';
 import '../models/ticket.dart';
 import '../services/socket_service.dart';
@@ -38,10 +29,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _messages = List.from(widget.ticket.messages);
     _isClosed = widget.ticket.status == 'closed';
 
-    // Join room
     _socket.joinRoom(widget.ticket.id);
-
-    // FIXED: off() dulu sebelum on() baru
     _socket.onNewMessage(_onNewMessage);
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -54,7 +42,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final incomingSender = msgData['sender'];
 
     setState(() {
-      // Cari optimistic message milik sender yang sama, replace jika ada
       final optimisticIndex = _messages.indexWhere(
         (m) =>
             m is Map &&
@@ -63,10 +50,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       if (optimisticIndex != -1) {
-        // Ganti optimistic dengan data real dari server
         _messages[optimisticIndex] = msgData;
       } else {
-        // Tidak ada optimistic (pesan dari orang lain), cek duplikat by id
         final alreadyExists =
             incomingId != null &&
             _messages.any((m) => m is Map && m['id'] == incomingId);
@@ -100,12 +85,11 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _isSending = true);
     _messageController.clear();
 
-    // FIXED: Optimistic UI — tampilkan pesan sebelum socket konfirmasi
     final optimisticMsg = {
       'message': text,
       'sender': 'customer',
       'createdAt': DateTime.now().toIso8601String(),
-      '_optimistic': true, // marker, diganti saat server balas
+      '_optimistic': true,
     };
     setState(() => _messages.add(optimisticMsg));
     _scrollToBottom();
@@ -113,7 +97,6 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_socket.isConnected) {
       _socket.sendMessage(widget.ticket.id, text);
     } else {
-      // Socket tidak ada — tampilkan warning
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -244,7 +227,8 @@ class _ChatScreenState extends State<ChatScreen> {
     Color bubbleColor;
     Color textColor;
     if (isMe) {
-      bubbleColor = isOptimistic ? Colors.blue[300]! : Colors.blue;
+      // CHANGED: biru → hijau
+      bubbleColor = isOptimistic ? Colors.green[300]! : Colors.green[600]!;
       textColor = Colors.white;
     } else if (isBot) {
       bubbleColor = Colors.amber[100]!;
@@ -276,7 +260,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            // Sender label
             if (!isMe)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -289,13 +272,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
-            // Isi pesan
             Text(
               text,
               style: TextStyle(color: textColor, fontSize: 14, height: 1.4),
             ),
             const SizedBox(height: 4),
-            // Waktu + status kirim
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -368,13 +349,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 : IconButton(
                     icon: Icon(
                       Icons.send_rounded,
-                      color: _isClosed ? Colors.grey : Colors.blue,
+                      // CHANGED: biru → hijau
+                      color: _isClosed ? Colors.grey : Colors.green,
                     ),
                     onPressed: _isClosed ? null : _sendMessage,
                     style: IconButton.styleFrom(
+                      // CHANGED: biru → hijau
                       backgroundColor: _isClosed
                           ? Colors.grey[100]
-                          : Colors.blue[50],
+                          : Colors.green[50],
                     ),
                   ),
           ],
@@ -390,7 +373,7 @@ class _ChatScreenState extends State<ChatScreen> {
         c = Colors.orange;
         break;
       case 'in-progress':
-        c = Colors.blue[300]!;
+        c = Colors.blue[300]!; // tetap biru — ini indikator status
         break;
       case 'closed':
         c = Colors.green;
@@ -469,7 +452,8 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: Colors.blue),
+          // CHANGED: biru → hijau
+          Icon(icon, size: 18, color: Colors.green),
           const SizedBox(width: 10),
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w600)),
           Expanded(
@@ -482,7 +466,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    // FIXED: hapus listener agar tidak ada ghost callback setelah screen ditutup
     _socket.removeListeners();
     _scrollController.dispose();
     _messageController.dispose();

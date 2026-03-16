@@ -1,11 +1,4 @@
 // screens/profile_screen.dart
-// FIXED:
-// - Hapus field "No HP" dari EditProfile — tidak ada di server/schema
-// - Pakai ApiService.errorMessage() untuk error yang ramah
-// - Logout bersihkan socket juga
-// - Guard jika user null di _navigateToEditProfile
-// - Edit profile tampilkan data yang sudah ada dengan benar
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
@@ -73,10 +66,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirm == true) {
-      // FIXED: dispose socket saat logout (session berakhir)
       SocketService().dispose();
-
-      await _api.logout(); // clear SharedPreferences
+      await _api.logout();
 
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
@@ -88,7 +79,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _navigateToEditProfile() async {
-    if (_user == null) return; // FIXED: guard
+    if (_user == null) return;
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => EditProfileScreen(user: _user!)),
@@ -114,6 +105,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loadUserData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
                 child: const Text('Coba Lagi'),
               ),
             ],
@@ -142,7 +144,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.blue[400]!, Colors.blue[700]!],
+                  // CHANGED: biru → hijau
+                  colors: [Colors.green[400]!, Colors.green[700]!],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -158,7 +161,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           : '?',
                       style: const TextStyle(
                         fontSize: 36,
-                        color: Colors.blue,
+                        // CHANGED: biru → hijau
+                        color: Colors.green,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -275,7 +279,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Color? valueColor,
   }) {
     return ListTile(
-      leading: Icon(icon, color: Colors.blue),
+      // CHANGED: biru → hijau
+      leading: Icon(icon, color: Colors.green),
       title: Text(
         label,
         style: const TextStyle(fontSize: 13, color: Colors.grey),
@@ -430,7 +435,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: 16),
 
-            // FIXED: Tidak ada field No HP — tidak ada di server
             TextFormField(
               controller: _addressCtrl,
               maxLines: 3,
@@ -487,7 +491,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               onPressed: _isLoading ? null : _saveChanges,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.blue,
+                // CHANGED: biru → hijau
+                backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),

@@ -1,13 +1,4 @@
 // screens/tickets_screen.dart
-// FIXED:
-// - Socket init() dipanggil sekali, dispose() TIDAK dipanggil (singleton)
-// - Filter 'open' logic diperbaiki — tampilkan open & in-progress di tab "Aktif"
-// - createTicket() return Ticket — bisa langsung tambah ke list tanpa reload
-// - Error message pakai ApiService.errorMessage()
-// - Tampilkan badge jumlah ticket aktif di AppBar
-// - Pull-to-refresh benar
-// - TicketCard navigasi ke ChatScreen dengan data fresh dari API
-
 import 'package:flutter/material.dart';
 import '../widgets/ticket_card.dart';
 import '../services/api_service.dart';
@@ -34,10 +25,8 @@ class _TicketsScreenState extends State<TicketsScreen> {
     super.initState();
     _loadTickets();
 
-    // FIXED: init socket jika belum (singleton, aman dipanggil berulang)
     _socket.init();
 
-    // FIXED: pakai onTicketUpdated bukan onTicketUpdate (nama konsisten dengan SocketService)
     _socket.onTicketUpdated((_) {
       if (mounted) _loadTickets();
     });
@@ -54,7 +43,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
       final loaded = await _api.getTickets();
       if (mounted) {
         setState(() {
-          // Urutkan: open & in-progress dulu, lalu closed, terbaru di atas
           _tickets = loaded
             ..sort((a, b) {
               if (a.isActive && !b.isActive) return -1;
@@ -76,11 +64,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
     }
   }
 
-  // FIXED: filter logic yang benar
   List<Ticket> get _filteredTickets {
     switch (_filterStatus) {
       case 'active':
-        // "Aktif" = open + in-progress
         return _tickets
             .where((t) => t.status == 'open' || t.status == 'in-progress')
             .toList();
@@ -188,7 +174,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
                           setModalState(() => isSubmitting = true);
                           try {
-                            // FIXED: createTicket sekarang return Ticket
                             final newTicket = await _api.createTicket(
                               title,
                               desc,
@@ -197,10 +182,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                             if (ctx.mounted) Navigator.pop(ctx);
                             if (mounted) {
                               setState(() {
-                                _tickets.insert(
-                                  0,
-                                  newTicket,
-                                ); // tambah langsung ke list
+                                _tickets.insert(0, newTicket);
                               });
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -225,7 +207,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                         },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: Colors.blue,
+                    backgroundColor: Colors.green, // CHANGED
                     foregroundColor: Colors.white,
                   ),
                   child: isSubmitting
@@ -251,7 +233,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
   }
 
   Future<void> _openChat(Ticket ticket) async {
-    // FIXED: Ambil data fresh dari API sebelum buka chat (pastikan messages terbaru)
     try {
       final fresh = await _api.getTicketDetail(ticket.id);
       if (!mounted) return;
@@ -259,9 +240,8 @@ class _TicketsScreenState extends State<TicketsScreen> {
         context,
         MaterialPageRoute(builder: (_) => ChatScreen(ticket: fresh)),
       );
-      _loadTickets(); // refresh setelah kembali
+      _loadTickets();
     } catch (e) {
-      // Fallback: pakai data lokal jika API gagal
       if (!mounted) return;
       await Navigator.push(
         context,
@@ -364,7 +344,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
         onPressed: _showSubmitTicketDialog,
         icon: const Icon(Icons.add),
         label: const Text('Keluhan Baru'),
-        backgroundColor: Colors.blue,
+        backgroundColor: Colors.green, // CHANGED
       ),
     );
   }
@@ -372,25 +352,40 @@ class _TicketsScreenState extends State<TicketsScreen> {
   Widget _buildFilterChip(String label, String value) {
     final isSelected = _filterStatus == value;
     return Expanded(
-      child: ChoiceChip(
-        label: Center(child: Text(label)),
-        selected: isSelected,
-        onSelected: (_) => setState(() => _filterStatus = value),
-        selectedColor: Colors.blue,
-        backgroundColor: Colors.grey[100],
-        labelStyle: TextStyle(
-          color: isSelected ? Colors.white : Colors.black87,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      child: GestureDetector(
+        onTap: () => setState(() => _filterStatus = value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: 38,
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.green : Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: isSelected ? Colors.white : Colors.black87,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 8),
       ),
     );
   }
 
   @override
   void dispose() {
-    // FIXED: JANGAN dispose() socket singleton di sini!
-    // Cukup hapus listener yang relevan dengan screen ini
     _socket.removeListeners();
     super.dispose();
   }

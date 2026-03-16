@@ -1,3 +1,4 @@
+// models/ml_model.dart
 import 'dart:math';
 
 class NaiveBayesClassifier {
@@ -30,121 +31,92 @@ class NaiveBayesClassifier {
     );
   }
 
-  /// Preprocessing teks (lowercasing, tokenisasi sederhana)
+  // ── Preprocessing ───────────────────────────────────────
+
+  /// Lowercase + hapus karakter khusus + tokenisasi
   List<String> preprocess(String text) {
     text = text.toLowerCase();
-    // Hapus karakter khusus, hanya ambil huruf dan angka
     text = text.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
-    // Split menjadi token
     return text.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
   }
 
-  /// Hitung TF (Term Frequency)
+  /// Hitung TF (Term Frequency) ternormalisasi
   Map<String, double> computeTF(List<String> tokens) {
-    Map<String, double> tf = {};
-    int totalTokens = tokens.length;
+    final Map<String, double> tf = {};
+    if (tokens.isEmpty) return tf;
 
-    if (totalTokens == 0) return tf;
-
-    for (var token in tokens) {
+    for (final token in tokens) {
       tf[token] = (tf[token] ?? 0) + 1;
     }
-
-    // Normalisasi
-    tf.forEach((key, value) {
-      tf[key] = value / totalTokens;
-    });
-
+    final total = tokens.length;
+    tf.updateAll((_, v) => v / total);
     return tf;
   }
 
-  /// Transformasi teks ke vektor TF-IDF
+  /// Transformasi teks → vektor TF-IDF
   List<double> transformToTfidf(String text) {
-    List<String> tokens = preprocess(text);
-    Map<String, double> tf = computeTF(tokens);
-
-    List<double> tfidfVector = List.filled(vocabulary.length, 0.0);
+    final tokens = preprocess(text);
+    final tf = computeTF(tokens);
+    final vector = List.filled(vocabulary.length, 0.0);
 
     tf.forEach((term, tfValue) {
-      if (vocabulary.containsKey(term)) {
-        int index = vocabulary[term]!;
-        tfidfVector[index] = tfValue * idf[index];
+      final index = vocabulary[term];
+      if (index != null) {
+        vector[index] = tfValue * idf[index];
       }
     });
 
-    return tfidfVector;
+    return vector;
   }
 
-  /// Prediksi kelas dari teks input
-  String predict(String text) {
-    List<double> tfidfVector = transformToTfidf(text);
-    List<double> scores = [];
+  // ── Prediksi ─────────────────────────────────────────────
 
-    for (int i = 0; i < classes.length; i++) {
+  /// Hitung raw log-probability score tiap kelas
+  List<double> _computeScores(List<double> tfidfVector) {
+    return List.generate(classes.length, (i) {
       double score = classPrior[i];
-
       for (int j = 0; j < tfidfVector.length; j++) {
         if (tfidfVector[j] > 0) {
           score += tfidfVector[j] * featureLogProb[i][j];
         }
       }
-
-      scores.add(score);
-    }
-
-    // Cari kelas dengan score tertinggi
-    int maxIndex = 0;
-    double maxScore = scores[0];
-
-    for (int i = 1; i < scores.length; i++) {
-      if (scores[i] > maxScore) {
-        maxScore = scores[i];
-        maxIndex = i;
-      }
-    }
-
-    return classes[maxIndex];
+      return score;
+    });
   }
 
-  /// Prediksi dengan confidence score
+  /// Softmax numerically stable → confidence tiap kelas
+  List<double> _softmax(List<double> scores) {
+    final maxScore = scores.reduce(max);
+    final exps = scores.map((s) => exp(s - maxScore)).toList();
+    final sumExp = exps.reduce((a, b) => a + b);
+    return exps.map((e) => e / sumExp).toList();
+  }
+
+  /// Prediksi kelas + confidence score
+  /// Returns: { 'class': String, 'confidence': double, 'allScores': Map<String,double> }
   Map<String, dynamic> predictWithConfidence(String text) {
-    List<double> tfidfVector = transformToTfidf(text);
-    List<double> scores = [];
-
-    for (int i = 0; i < classes.length; i++) {
-      double score = classPrior[i];
-
-      for (int j = 0; j < tfidfVector.length; j++) {
-        if (tfidfVector[j] > 0) {
-          score += tfidfVector[j] * featureLogProb[i][j];
-        }
-      }
-
-      scores.add(score);
+    if (classes.isEmpty) {
+      return {'class': 'default', 'confidence': 0.0, 'allScores': {}};
     }
 
-    // Cari kelas dengan score tertinggi
+    final tfidfVector = transformToTfidf(text);
+    final scores = _computeScores(tfidfVector);
+    final probabilities = _softmax(scores);
+
+    // Kelas dengan probabilitas tertinggi
     int maxIndex = 0;
-    double maxScore = scores[0];
-
-    for (int i = 1; i < scores.length; i++) {
-      if (scores[i] > maxScore) {
-        maxScore = scores[i];
-        maxIndex = i;
-      }
+    for (int i = 1; i < probabilities.length; i++) {
+      if (probabilities[i] > probabilities[maxIndex]) maxIndex = i;
     }
 
-    // Hitung confidence (softmax approximation)
-    double expSum = 0;
-    for (var score in scores) {
-      expSum += exp(score - maxScore);
-    }
-    double confidence = 1.0 / expSum;
+    final allScores = {
+      for (int i = 0; i < classes.length; i++) classes[i]: probabilities[i],
+    };
 
     return {
       'class': classes[maxIndex],
-      'confidence': confidence,
-      'all_scores': scores,
+      'confidence': probabilities[maxIndex],
+      'allScores': allScores,
     };
   }
 }

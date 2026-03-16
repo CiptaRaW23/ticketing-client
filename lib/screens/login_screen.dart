@@ -1,12 +1,3 @@
-// screens/login_screen.dart
-// FIXED:
-// - Pakai ApiService.login() bukan Dio mentah
-// - Simpan role & address dari response
-// - Error message dari ApiService.errorMessage()
-// - Inisialisasi SocketService setelah login berhasil
-// - Tampil/sembunyikan password
-// - Keyboard handling yang benar (TextInputAction)
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
@@ -56,7 +47,6 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setInt('userId', userId);
         await prefs.setString('userRole', userRole);
 
-        // FIXED: Inisialisasi socket setelah login berhasil
         SocketService().init();
 
         if (!mounted) return;
@@ -97,29 +87,12 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo
-                Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.headset_mic,
-                    size: 56,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Ticketing Keluhan\nPelanggan',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    height: 1.3,
-                  ),
+                // FIXED: hapus Container kosong
+                Image.asset(
+                  'assets/logo.png',
+                  width: 150,
+                  height: 150,
+                  fit: BoxFit.contain,
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -127,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
 
                 // Username
                 TextField(
@@ -177,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _isLoading ? null : _login,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Colors.blue,
+                      backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
