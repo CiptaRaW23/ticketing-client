@@ -1,4 +1,3 @@
-// services/chatbot_service.dart
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import '../models/ml_model.dart';
@@ -18,9 +17,8 @@ class ChatbotService {
   static const double confidenceThreshold = 0.25;
 
   // ── Init ──────────────────────────────────────────────────
-
   Future<void> initialize() async {
-    if (_isInitialized) return; // Jangan load ulang kalau sudah siap
+    if (_isInitialized) return;
 
     try {
       final jsonString = await rootBundle.loadString(
@@ -38,8 +36,7 @@ class ChatbotService {
   }
 
   // ── Public API ────────────────────────────────────────────
-
-  /// Return response string saja (untuk penggunaan sederhana)
+  /// Return response string
   Future<String> getResponse(String userInput) async {
     final result = await getResponseWithConfidence(userInput);
     return result['response'] as String;
@@ -103,7 +100,6 @@ class ChatbotService {
   List<String> getAvailableCategories() => _classifier?.classes ?? [];
 
   // ── Helper ────────────────────────────────────────────────
-
   Map<String, dynamic> _buildResult({
     required String response,
     required double confidence,

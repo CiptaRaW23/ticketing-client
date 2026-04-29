@@ -1,5 +1,3 @@
-// screens/faq_chatbot_screen.dart
-
 import 'package:flutter/material.dart';
 import '../services/chatbot_service.dart';
 import '../models/chat_message.dart';
@@ -196,7 +194,7 @@ class _FaqChatbotScreenState extends State<FaqChatbotScreen> {
         child: CircleAvatar(
           backgroundColor: Colors.white24,
           child: Text(
-            'FM',
+            'J',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.bold,
@@ -208,7 +206,7 @@ class _FaqChatbotScreenState extends State<FaqChatbotScreen> {
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('FirstMedia Support', style: TextStyle(fontSize: 15)),
+          const Text('Jagonet Support', style: TextStyle(fontSize: 15)),
           Row(
             children: [
               Container(

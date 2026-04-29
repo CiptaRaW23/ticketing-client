@@ -1,5 +1,3 @@
-// widgets/chatbot/chat_bubble.dart
-
 import 'package:flutter/material.dart';
 import '../../models/chat_message.dart';
 
@@ -142,7 +140,7 @@ class BotAvatar extends StatelessWidget {
       ),
       child: const Center(
         child: Text(
-          'FM',
+          'J',
           style: TextStyle(
             color: Colors.white,
             fontSize: 11,

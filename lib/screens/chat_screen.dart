@@ -1,4 +1,3 @@
-// screens/chat_screen.dart
 import 'package:flutter/material.dart';
 import '../models/ticket.dart';
 import '../services/socket_service.dart';

@@ -26,7 +26,6 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // FIXED: inject token via interceptor, bukan manual setiap request
           final prefs = await SharedPreferences.getInstance();
           final token = prefs.getString('token');
           if (token != null) {
@@ -35,7 +34,6 @@ class ApiService {
           handler.next(options);
         },
         onError: (DioException e, handler) {
-          // FIXED: format error yang ramah sebelum dilempar ke UI
           handler.next(_handleDioError(e));
         },
       ),
@@ -78,17 +76,45 @@ class ApiService {
       requestOptions: e.requestOptions,
       response: e.response,
       type: e.type,
-      error: message, // pesan yang ramah
+      error: message,
     );
   }
 
-  /// Extract pesan error yang bisa langsung ditampilkan ke user
   static String errorMessage(Object e) {
     if (e is DioException) {
       return e.error?.toString() ?? 'Terjadi kesalahan';
     }
     return e.toString();
   }
+
+  // ── Generic methods (dipakai teknisi screen) ──
+
+  /// GET request — return raw Map/List dari server
+  Future<dynamic> get(String path, {Map<String, dynamic>? query}) async {
+    final response = await _dio.get('/api$path', queryParameters: query);
+    return response.data;
+  }
+
+  /// POST request — return raw Map dari server
+  Future<dynamic> post(String path, [Map<String, dynamic>? body]) async {
+    final response = await _dio.post('/api$path', data: body);
+    return response.data;
+  }
+
+  /// PATCH request — return raw Map dari server
+  Future<dynamic> patch(String path, [Map<String, dynamic>? body]) async {
+    final response = await _dio.patch('/api$path', data: body);
+    return response.data;
+  }
+
+  /// DELETE request — return raw Map dari server
+  Future<dynamic> delete(String path) async {
+    final response = await _dio.delete('/api$path');
+    return response.data;
+  }
+
+  // ── Getter Dio untuk upload multipart (dipakai teknisi upload foto) ──
+  Dio get dio => _dio;
 
   // ==================== AUTH ====================
 
@@ -109,14 +135,22 @@ class ApiService {
 
   Future<List<Ticket>> getTickets() async {
     final response = await _dio.get('/api/tickets');
-    return (response.data as List)
+    final data = response.data;
+    // Support both array dan {success, tickets}
+    final list = data is List ? data : (data['tickets'] ?? []);
+    return (list as List)
         .map((json) => Ticket.fromJson(json as Map<String, dynamic>))
         .toList();
   }
 
   Future<Ticket> getTicketDetail(int id) async {
     final response = await _dio.get('/api/tickets/$id');
-    return Ticket.fromJson(response.data as Map<String, dynamic>);
+    final data = response.data;
+    // Support both {ticket: ...} dan flat ticket object
+    final ticketData = data is Map && data.containsKey('ticket')
+        ? data['ticket']
+        : data;
+    return Ticket.fromJson(ticketData as Map<String, dynamic>);
   }
 
   Future<Ticket> createTicket(
@@ -132,7 +166,6 @@ class ApiService {
         if (address != null && address.isNotEmpty) 'address': address,
       },
     );
-    // FIXED: return ticket object, bukan void — bisa langsung update UI
     return Ticket.fromJson(response.data as Map<String, dynamic>);
   }
 
@@ -146,8 +179,7 @@ class ApiService {
   Future<User> updateProfile({String? name, String? address}) async {
     final data = <String, dynamic>{};
     if (name != null && name.isNotEmpty) data['name'] = name;
-    if (address != null)
-      data['address'] = address; // boleh kirim string kosong untuk clear
+    if (address != null) data['address'] = address;
     final response = await _dio.patch('/api/user/profile', data: data);
     return User.fromJson(response.data['user'] as Map<String, dynamic>);
   }

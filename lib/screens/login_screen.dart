@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 import '../services/socket_service.dart';
 import 'main_navigation.dart';
+import '/technician/technician_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -50,10 +51,19 @@ class _LoginScreenState extends State<LoginScreen> {
         SocketService().init();
 
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainNavigation()),
-        );
+
+        // ── Routing berdasarkan role ──
+        if (userRole == 'technician') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const TechnicianNavigation()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainNavigation()),
+          );
+        }
       } else {
         _showSnackBar(data['error']?.toString() ?? 'Login gagal');
       }
@@ -87,7 +97,6 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // FIXED: hapus Container kosong
                 Image.asset(
                   'assets/logo.png',
                   width: 150,
@@ -101,11 +110,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-
-                // Username
                 TextField(
                   controller: _usernameController,
-                  keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.next,
                   onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                   decoration: InputDecoration(
@@ -118,8 +124,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Password
                 TextField(
                   controller: _passwordController,
                   focusNode: _passwordFocusNode,
@@ -142,8 +146,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 30),
-
-                // Tombol Login
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(

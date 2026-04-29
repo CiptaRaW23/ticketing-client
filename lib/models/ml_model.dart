@@ -1,4 +1,3 @@
-// models/ml_model.dart
 import 'dart:math';
 
 class NaiveBayesClassifier {
@@ -32,8 +31,6 @@ class NaiveBayesClassifier {
   }
 
   // ── Preprocessing ───────────────────────────────────────
-
-  /// Lowercase + hapus karakter khusus + tokenisasi
   List<String> preprocess(String text) {
     text = text.toLowerCase();
     text = text.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ');
@@ -70,7 +67,6 @@ class NaiveBayesClassifier {
   }
 
   // ── Prediksi ─────────────────────────────────────────────
-
   /// Hitung raw log-probability score tiap kelas
   List<double> _computeScores(List<double> tfidfVector) {
     return List.generate(classes.length, (i) {
@@ -93,7 +89,6 @@ class NaiveBayesClassifier {
   }
 
   /// Prediksi kelas + confidence score
-  /// Returns: { 'class': String, 'confidence': double, 'allScores': Map<String,double> }
   Map<String, dynamic> predictWithConfidence(String text) {
     if (classes.isEmpty) {
       return {'class': 'default', 'confidence': 0.0, 'allScores': {}};

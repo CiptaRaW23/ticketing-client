@@ -1,11 +1,3 @@
-// models/ticket.dart
-// FIXED:
-// - Null safety pada semua field fromJson
-// - Tambah field priority (ada di server tapi tidak di model)
-// - Tambah field address, mapsLink, updatedAt
-// - Helper getter: statusLabel, statusColor, priorityColor
-// - Tambah toJson() untuk keperluan debugging
-
 class Ticket {
   final int id;
   final String title;
@@ -38,7 +30,6 @@ class Ticket {
       id: json['id'] as int? ?? 0,
       title: json['title'] as String? ?? 'Tanpa Judul',
       description: json['description'] as String? ?? '',
-      // PENTING: server kirim "in-progress" (dash), bukan "in_progress"
       status: json['status'] as String? ?? 'open',
       priority: json['priority'] as String? ?? 'low',
       address: json['address'] as String?,
@@ -67,9 +58,6 @@ class Ticket {
     };
   }
 
-  // ── Helper getters ──
-
-  /// Label status dalam Bahasa Indonesia
   String get statusLabel {
     switch (status) {
       case 'open':
@@ -83,10 +71,8 @@ class Ticket {
     }
   }
 
-  /// Apakah ticket masih aktif (belum closed)
   bool get isActive => status != 'closed';
 
-  /// Label prioritas
   String get priorityLabel {
     switch (priority) {
       case 'high':
@@ -100,7 +86,6 @@ class Ticket {
     }
   }
 
-  /// Tanggal dibuat yang sudah diformat (aman, tidak crash)
   String get formattedDate {
     try {
       final dt = DateTime.parse(createdAt).toLocal();
@@ -125,7 +110,6 @@ class Ticket {
     }
   }
 
-  /// copyWith untuk immutable update
   Ticket copyWith({String? status, String? priority, List<dynamic>? messages}) {
     return Ticket(
       id: id,

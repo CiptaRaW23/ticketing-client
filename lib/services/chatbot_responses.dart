@@ -1,7 +1,3 @@
-// services/chatbot_responses.dart
-// Berisi semua teks respons chatbot JagoNET
-// Dipisah dari ChatbotService agar mudah diedit tanpa menyentuh logika
-
 class ChatbotResponses {
   static const Map<String, String> all = {
     // ─────────────────────────────────────────
@@ -102,7 +98,7 @@ Lampu LOS merah artinya modem tidak mendapat sinyal dari jaringan fiber. Ini per
 
 ⚠️ Lampu LOS merah tidak bisa diperbaiki sendiri dan perlu teknisi datang ke rumah.
 
-Segera buat laporan di tab Ticket ya — sertakan foto kondisi lampu modem kamu agar tim kami bisa proses lebih cepat 📸''',
+Segera buat laporan di tab Ticket ya — ''',
 
     // ─────────────────────────────────────────
     // 6. RESTART TIDAK BERHASIL

@@ -17,12 +17,11 @@ class SocketService {
       return;
     }
 
-    // Dispose socket lama jika ada
     _socket?.dispose();
     _initialized = false;
 
     _socket = IO.io(serverUrl, <String, dynamic>{
-      'transports': ['websocket', 'polling'], // FIXED: polling sebagai fallback
+      'transports': ['websocket', 'polling'],
       'autoConnect': true,
       'reconnection': true,
       'reconnectionAttempts': 10,
@@ -39,24 +38,16 @@ class SocketService {
       print('[Socket] ❌ Disconnected');
     });
 
-    _socket!.onConnectError((err) {
-      print('[Socket] ❌ Connect error: $err');
-    });
-
-    _socket!.onError((err) {
-      print('[Socket] ❌ Error: $err');
-    });
-
-    _socket!.onReconnect((_) {
-      print('[Socket] 🔄 Reconnected');
-    });
+    _socket!.onConnectError((err) => print('[Socket] ❌ Connect error: $err'));
+    _socket!.onError((err) => print('[Socket] ❌ Error: $err'));
+    _socket!.onReconnect((_) => print('[Socket] 🔄 Reconnected'));
   }
 
   bool get isConnected => _socket?.connected ?? false;
 
-  // ── Room ──
+  // ── Rooms ──
 
-  /// Join room ticket. Otomatis retry jika socket belum siap.
+  /// Join room ticket (customer/admin chat)
   void joinRoom(int ticketId, {int retryCount = 0}) {
     if (_socket?.connected ?? false) {
       _socket!.emit('joinTicketRoom', ticketId);
@@ -66,9 +57,21 @@ class SocketService {
         print('[Socket] ⚠️ Gagal join room setelah 10x retry');
         return;
       }
-      print('[Socket] ⏳ Belum terhubung, retry ${retryCount + 1}/10...');
       Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
         joinRoom(ticketId, retryCount: retryCount + 1);
+      });
+    }
+  }
+
+  /// Join room teknisi untuk menerima notifikasi assignment baru
+  void joinTechnicianRoom(int technicianId, {int retryCount = 0}) {
+    if (_socket?.connected ?? false) {
+      _socket!.emit('joinTechnicianRoom', technicianId);
+      print('[Socket] 🔧 Joined technician room: $technicianId');
+    } else {
+      if (retryCount >= 10) return;
+      Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
+        joinTechnicianRoom(technicianId, retryCount: retryCount + 1);
       });
     }
   }
@@ -85,16 +88,14 @@ class SocketService {
       'message': message,
       'sender': 'customer',
     });
-    print('[Socket] 📤 Message sent to ticket-$ticketId');
   }
 
-  // ── Listeners ──
-  // FIXED: selalu off() dulu sebelum on() baru agar tidak duplikat
+  // ── Listeners Customer ──
 
   void onNewMessage(Function(dynamic) callback) {
-    _socket?.off('newMessage'); // hapus listener lama
+    _socket?.off('newMessage');
     _socket?.on('newMessage', (data) {
-      print('[Socket] 📩 newMessage: $data');
+      print('[Socket] 📩 newMessage');
       callback(data);
     });
   }
@@ -115,17 +116,43 @@ class SocketService {
     });
   }
 
-  /// Hapus semua listener (dipanggil saat screen di-dispose)
+  // ── Listeners Teknisi ──
+
+  /// Dipanggil saat admin assign ticket baru ke teknisi ini
+  void onNewAssignment(Function(dynamic) callback) {
+    _socket?.off('newAssignment');
+    _socket?.on('newAssignment', (data) {
+      print('[Socket] 📋 newAssignment');
+      callback(data);
+    });
+  }
+
+  /// Dipanggil saat ticket yang sedang dikerjakan teknisi diupdate admin
+  void onTicketUpdatedTechnician(Function(dynamic) callback) {
+    _socket?.off('ticketUpdated');
+    _socket?.on('ticketUpdated', (data) {
+      print('[Socket] 🔄 ticketUpdated (teknisi)');
+      callback(data);
+    });
+  }
+
+  // ── Remove Listeners ──
+
   void removeListeners() {
     _socket?.off('newMessage');
     _socket?.off('ticketUpdated');
     _socket?.off('newTicket');
+    _socket?.off('newAssignment');
     print('[Socket] 🧹 Listeners removed');
   }
 
-  // ── Dispose ──
-  // FIXED: hanya disconnect, tidak destroy singleton.
-  // Panggil init() lagi jika ingin reconnect.
+  void removeListenersByEvent(List<String> events) {
+    for (final e in events) {
+      _socket?.off(e);
+    }
+  }
+
+  // ── Disconnect / Dispose ──
 
   void disconnect() {
     _socket?.disconnect();

@@ -1,9 +1,3 @@
-// models/user.dart
-// FIXED:
-// - Null safety pada fromJson (tidak crash jika field hilang dari server)
-// - Hapus field phone (tidak ada di server/schema)
-// - Tambah lastLoginAt
-
 class User {
   final int id;
   final String username;

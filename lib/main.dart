@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
+import 'technician/technician_navigation.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,12 +49,22 @@ class _SplashCheckState extends State<SplashCheck> {
     await Future.delayed(const Duration(seconds: 3));
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
+    final role = prefs.getString('userRole') ?? 'customer';
+
     if (!mounted) return;
+
     if (token != null && token.isNotEmpty) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MainNavigation()),
-      );
+      if (role == 'technician') {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const TechnicianNavigation()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MainNavigation()),
+        );
+      }
     } else {
       Navigator.pushReplacement(
         context,
