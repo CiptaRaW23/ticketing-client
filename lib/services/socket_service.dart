@@ -136,6 +136,24 @@ class SocketService {
     });
   }
 
+  // Dipanggil saat admin approve → ticket resmi closed
+  void onTicketClosed(Function(dynamic) callback) {
+    _socket?.off('ticketClosed');
+    _socket?.on('ticketClosed', (data) {
+      print('[Socket] ✅ ticketClosed');
+      callback(data);
+    });
+  }
+
+  // Dipanggil saat admin reject → teknisi harus lanjut kerja
+  void onConfirmationRejected(Function(dynamic) callback) {
+    _socket?.off('confirmationRejected');
+    _socket?.on('confirmationRejected', (data) {
+      print('[Socket] ↩️ confirmationRejected');
+      callback(data);
+    });
+  }
+
   // ── Remove Listeners ──
 
   void removeListeners() {
@@ -143,6 +161,8 @@ class SocketService {
     _socket?.off('ticketUpdated');
     _socket?.off('newTicket');
     _socket?.off('newAssignment');
+    _socket?.off('ticketClosed');
+    _socket?.off('confirmationRejected');
     print('[Socket] 🧹 Listeners removed');
   }
 

@@ -78,10 +78,13 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
   Future<void> _logout() async {
     final ok = await showConfirmDialog(
       context,
-      title: 'Konfirmasi Logout',
-      content: 'Yakin ingin keluar dari akun ini?',
+      title: 'Keluar dari akun?',
+      content: 'Kamu perlu login kembali untuk mengakses aplikasi.',
       confirmLabel: 'Logout',
-      confirmColor: Colors.red,
+      confirmColor: Colors.red[600]!,
+      headerIcon: Icons.logout_rounded,
+      headerIconBg: Colors.red[50],
+      headerIconColor: Colors.red[600],
     );
     if (!ok || !mounted) return;
 
@@ -98,9 +101,14 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
     }
   }
 
+  bool _isEmpty(String key) {
+    final v = _user?[key] as String?;
+    return v == null || v.isEmpty;
+  }
+
   String _field(String key) {
     final v = _user?[key] as String?;
-    return (v?.isNotEmpty == true) ? v! : 'Belum diisi';
+    return (v?.isNotEmpty == true) ? v! : '';
   }
 
   @override
@@ -170,22 +178,68 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Stats
+                          // ── Highlight: tugas pending ──
+                          if (_totalAssigned > 0) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.orange[50],
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.orange[200]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  Text(
+                                    '$_totalAssigned',
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.orange[700],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Tugas menunggu konfirmasi',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.orange[800],
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Segera respon assignment baru',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.orange[600],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.orange[400],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+
+                          // ── Stats 2-col ──
                           Row(
                             children: [
                               Expanded(
                                 child: StatCard(
-                                  value: _totalAssigned.toString(),
-                                  label: 'Pending',
-                                  icon: Icons.pending_outlined,
-                                  color: Colors.orange[700]!,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: StatCard(
                                   value: _totalActive.toString(),
-                                  label: 'Aktif',
+                                  label: 'Aktif sekarang',
                                   icon: Icons.construction_outlined,
                                   color: TechColors.primary,
                                 ),
@@ -194,7 +248,7 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
                               Expanded(
                                 child: StatCard(
                                   value: _totalDone.toString(),
-                                  label: 'Selesai',
+                                  label: 'Total selesai',
                                   icon: Icons.check_circle_outline,
                                   color: Colors.blue[700]!,
                                 ),
@@ -203,7 +257,7 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Info Akun
+                          // ── Info Akun ──
                           InfoCard(
                             title: 'Informasi Akun',
                             children: [
@@ -211,27 +265,33 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
                                 icon: Icons.person_outline,
                                 label: 'Username',
                                 value: _user?['username'] ?? '—',
+                                isEmpty:
+                                    (_user?['username'] as String?)?.isEmpty !=
+                                    false,
                               ),
                               InfoTile(
                                 icon: Icons.phone_outlined,
                                 label: 'No. HP',
                                 value: _field('phone'),
+                                isEmpty: _isEmpty('phone'),
                               ),
                               InfoTile(
                                 icon: Icons.email_outlined,
                                 label: 'Email',
                                 value: _field('email'),
+                                isEmpty: _isEmpty('email'),
                               ),
                               InfoTile(
                                 icon: Icons.location_on_outlined,
                                 label: 'Alamat',
                                 value: _field('address'),
+                                isEmpty: _isEmpty('address'),
                               ),
                             ],
                           ),
                           const SizedBox(height: 16),
 
-                          // Logout
+                          // ── Logout ──
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton.icon(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/api_service.dart';
 import '../../utils/constants.dart';
 import '../widgets/technician_widgets.dart';
@@ -23,6 +24,8 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
   bool _isLoading = false;
   bool _isUploading = false;
   bool _isUpdating = false;
+  int _uploadProgress = 0;
+  String? _uploadFileName;
 
   Map<String, dynamic>? _ticket;
   List<Map<String, dynamic>> _photos = [];
@@ -51,39 +54,87 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         });
       }
     } catch (e) {
-      showSnack(context, ApiService.errorMessage(e));
+      showSemanticSnack(
+        context,
+        'Gagal memuat data',
+        subtitle: ApiService.errorMessage(e),
+        type: SnackType.error,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ── Update Status ──────────────────────────────────────
+  // ── Update Status (hanya untuk mulai pengerjaan) ───────
   Future<void> _updateStatus(String newStatus) async {
-    final label = newStatus == 'in-progress' ? 'In Progress' : 'Selesai';
-    final warningMsg = newStatus == 'closed'
-        ? 'Pastikan pekerjaan sudah selesai dan minimal 1 foto bukti sudah dikirim.'
-        : 'Status ticket akan berubah menjadi In Progress dan kamu mulai mengerjakan.';
-
     final ok = await showConfirmDialog(
       context,
-      title: 'Ubah Status → $label?',
-      content: warningMsg,
-      confirmLabel: 'Ya, $label',
+      title: 'Mulai pengerjaan?',
+      content:
+          'Status ticket akan berubah ke In Progress dan kamu mulai mengerjakan.',
+      confirmLabel: 'Ya, Mulai',
+      confirmColor: TechColors.primary,
+      headerIcon: Icons.play_circle_outline_rounded,
+      headerIconBg: const Color(0xFFE8F5E9),
+      headerIconColor: TechColors.primary,
     );
     if (!ok || !mounted) return;
 
     setState(() => _isUpdating = true);
     try {
       await _api.patch('/tickets/${widget.ticketId}', {'status': newStatus});
-      showSnack(
+      showSemanticSnack(
         context,
-        newStatus == 'closed'
-            ? '✅ Ticket berhasil diselesaikan!'
-            : '✅ Status diperbarui ke In Progress',
+        'Status diperbarui ke In Progress',
+        subtitle: 'Silakan mulai kerjakan dan kirim foto bukti',
+        type: SnackType.success,
       );
       await _load();
     } catch (e) {
-      showSnack(context, ApiService.errorMessage(e));
+      showSemanticSnack(
+        context,
+        'Gagal mengubah status',
+        subtitle: ApiService.errorMessage(e),
+        type: SnackType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  // ── Mark Done — kirim ke /done, tunggu konfirmasi admin ──
+  Future<void> _markDone() async {
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Tandai pekerjaan selesai?',
+      content:
+          'Admin akan memverifikasi foto bukti dan mengkonfirmasi ke pelanggan. '
+          'Ticket baru ditutup setelah admin approve.',
+      confirmLabel: 'Ya, Tandai Selesai',
+      confirmColor: Colors.green[700]!,
+      headerIcon: Icons.check_circle_outline_rounded,
+      headerIconBg: const Color(0xFFEAF3DE),
+      headerIconColor: Colors.green[700],
+    );
+    if (!ok || !mounted) return;
+
+    setState(() => _isUpdating = true);
+    try {
+      await _api.post('/tickets/${widget.ticketId}/done', {});
+      showSemanticSnack(
+        context,
+        'Berhasil ditandai selesai',
+        subtitle: 'Menunggu verifikasi dan konfirmasi dari admin',
+        type: SnackType.success,
+      );
+      await _load();
+    } catch (e) {
+      showSemanticSnack(
+        context,
+        'Gagal menandai selesai',
+        subtitle: ApiService.errorMessage(e),
+        type: SnackType.error,
+      );
     } finally {
       if (mounted) setState(() => _isUpdating = false);
     }
@@ -100,49 +151,81 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Container(
-              width: 40,
-              height: 4,
+              width: 36,
+              height: 3,
               decoration: BoxDecoration(
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             const Text(
               'Kirim Foto Bukti',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Maks. 5 foto · JPG, PNG',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
             ),
             const SizedBox(height: 8),
             ListTile(
               leading: IconBox(
-                icon: Icons.camera_alt,
+                icon: Icons.camera_alt_rounded,
                 color: TechColors.primary,
+                bgColor: const Color(0xFFEAF3DE),
               ),
               title: const Text(
                 'Ambil Foto',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
-              subtitle: const Text('Gunakan kamera HP'),
+              subtitle: Text(
+                'Kamera langsung',
+                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _pickAndUpload(ImageSource.camera);
               },
             ),
             ListTile(
-              leading: IconBox(icon: Icons.photo_library, color: Colors.blue),
+              leading: IconBox(
+                icon: Icons.photo_library_rounded,
+                color: const Color(0xFF185FA5),
+                bgColor: const Color(0xFFE6F1FB),
+              ),
               title: const Text(
                 'Pilih dari Galeri',
-                style: TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
-              subtitle: const Text('Pilih foto yang sudah ada'),
+              subtitle: Text(
+                'Pilih beberapa sekaligus',
+                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _pickAndUpload(ImageSource.gallery);
               },
             ),
-            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'Batal',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -158,15 +241,19 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
       );
       if (file == null || !mounted) return;
 
+      // Dialog keterangan foto
       String caption = '';
       final ctrl = TextEditingController();
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
           ),
-          title: const Text('Keterangan Foto', style: TextStyle(fontSize: 16)),
+          title: const Text(
+            'Keterangan Foto',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+          ),
           content: TextField(
             controller: ctrl,
             decoration: InputDecoration(
@@ -185,6 +272,9 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: TechColors.primary,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               onPressed: () {
                 caption = ctrl.text.trim();
@@ -198,16 +288,42 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
       ctrl.dispose();
 
       if (!mounted) return;
-      setState(() => _isUploading = true);
+      setState(() {
+        _isUploading = true;
+        _uploadProgress = 0;
+        _uploadFileName = file.path.split('/').last;
+      });
       await _uploadPhoto(File(file.path), caption);
     } catch (e) {
-      showSnack(context, 'Gagal memilih foto: $e');
+      showSemanticSnack(
+        context,
+        'Gagal memilih foto',
+        subtitle: e.toString(),
+        type: SnackType.error,
+      );
     } finally {
-      if (mounted) setState(() => _isUploading = false);
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadProgress = 0;
+          _uploadFileName = null;
+        });
+      }
     }
   }
 
   Future<void> _uploadPhoto(File file, String caption) async {
+    // Validasi file masih ada
+    if (!await file.exists()) {
+      showSemanticSnack(
+        context,
+        'File tidak ditemukan',
+        subtitle: 'Coba pilih foto lagi',
+        type: SnackType.error,
+      );
+      return;
+    }
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token') ?? '';
@@ -218,21 +334,43 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         ),
         if (caption.isNotEmpty) 'captions': caption,
       });
+
       await _api.dio.post(
         '$serverUrl/api/tickets/${widget.ticketId}/photos',
         data: formData,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
+        onSendProgress: (sent, total) {
+          if (total <= 0 || !mounted) return;
+          setState(() => _uploadProgress = (sent / total * 100).round());
+        },
       );
-      showSnack(context, '✅ Foto berhasil dikirim!');
+
+      showSemanticSnack(
+        context,
+        'Foto berhasil dikirim',
+        subtitle: 'Tersimpan di galeri foto ticket',
+        type: SnackType.success,
+      );
       await _load();
     } catch (e) {
-      showSnack(context, 'Gagal upload foto: ${ApiService.errorMessage(e)}');
+      showSemanticSnack(
+        context,
+        'Gagal upload foto',
+        subtitle: ApiService.errorMessage(e),
+        type: SnackType.error,
+      );
     }
   }
 
-  void _openPhoto(String url) => Navigator.push(
+  void _openPhoto(String url, int index) => Navigator.push(
     context,
-    MaterialPageRoute(builder: (_) => _PhotoViewer(url: '$serverUrl$url')),
+    MaterialPageRoute(
+      builder: (_) => _PhotoViewer(
+        url: '$serverUrl$url',
+        current: index + 1,
+        total: _photos.length,
+      ),
+    ),
   );
 
   @override
@@ -243,21 +381,30 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
     if (_ticket == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Detail Tugas')),
-        body: const Center(child: Text('Ticket tidak ditemukan')),
+        body: EmptyState(
+          icon: Icons.search_off_rounded,
+          message: 'Ticket tidak ditemukan',
+          subtitle: 'Mungkin sudah dihapus atau tidak ada aksesnya',
+          onRefresh: _load,
+        ),
       );
     }
 
     final t = _ticket!;
     final status = t['status'] as String? ?? 'assigned';
+
+    // ── Perubahan B: tambah technicianDone & state baru ──
+    final technicianDone = t['technicianDone'] as bool? ?? false;
+    final canStart = status == 'assigned';
+    final canClose = status == 'in-progress' && !technicianDone;
+    final isWaiting = status == 'in-progress' && technicianDone;
+    final isClosed = status == 'closed';
+
     final schedule = t['visitSchedule'] as Map<String, dynamic>?;
     final assignments = t['assignments'] as List?;
     final adminNote = assignments?.isNotEmpty == true
         ? (assignments!.first as Map<String, dynamic>)['adminNote'] as String?
         : null;
-
-    final canStart = status == 'assigned';
-    final canClose = status == 'in-progress';
-    final isClosed = status == 'closed';
 
     return Scaffold(
       backgroundColor: TechColors.bg,
@@ -265,7 +412,22 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         backgroundColor: TechColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: Text('Ticket #${t['id']}'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ticket #${t['id']}',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              'Detail tugas',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withOpacity(0.7),
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
         ],
@@ -275,10 +437,10 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            StatusBanner(status: status),
+            StatusBanner(status: isWaiting ? 'in-progress-done' : status),
             const SizedBox(height: 16),
 
-            // Info Ticket
+            // ── Info Ticket ──
             SectionCard(
               title: 'Informasi Ticket',
               icon: Icons.info_outline_rounded,
@@ -303,7 +465,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Jadwal Kunjungan
+            // ── Jadwal Kunjungan ──
             if (schedule != null) ...[
               SectionCard(
                 title: 'Jadwal Kunjungan',
@@ -329,13 +491,13 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
               const SizedBox(height: 12),
             ],
 
-            // Catatan Admin
+            // ── Catatan Admin ──
             if (adminNote != null && adminNote.isNotEmpty) ...[
               AdminNoteBanner(note: adminNote),
               const SizedBox(height: 12),
             ],
 
-            // Foto Bukti
+            // ── Foto Bukti ──
             SectionCard(
               title: 'Foto Bukti (${_photos.length})',
               icon: Icons.photo_library_outlined,
@@ -384,8 +546,53 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                       ),
                     )
                   : null,
-              child: _photos.isEmpty
-                  ? Center(
+              child: Column(
+                children: [
+                  // Hint upload
+                  if (!isClosed && _photos.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE6F1FB),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF85B7EB),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 14,
+                            color: Color(0xFF185FA5),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Foto harus jelas dan menunjukkan area yang diperbaiki',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.blue[800],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Progress bar saat upload
+                  if (_isUploading)
+                    UploadProgressBar(
+                      progress: _uploadProgress,
+                      fileName: _uploadFileName,
+                    ),
+
+                  // Grid foto
+                  if (_photos.isEmpty && !_isUploading)
+                    Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         child: Column(
@@ -407,7 +614,8 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                         ),
                       ),
                     )
-                  : GridView.builder(
+                  else if (_photos.isNotEmpty)
+                    GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate:
@@ -420,20 +628,44 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                       itemBuilder: (ctx, i) {
                         final p = _photos[i];
                         return GestureDetector(
-                          onTap: () => _openPhoto(p['url'] as String),
+                          onTap: () => _openPhoto(p['url'] as String, i),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                Image.network(
-                                  '$serverUrl${p['url']}',
+                                CachedNetworkImage(
+                                  imageUrl: '$serverUrl${p['url']}',
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  placeholder: (_, __) => Container(
                                     color: Colors.grey[100],
-                                    child: Icon(
-                                      Icons.broken_image,
-                                      color: Colors.grey[400],
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: TechColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  errorWidget: (_, __, ___) => Container(
+                                    color: Colors.grey[100],
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.broken_image,
+                                          color: Colors.grey[400],
+                                          size: 24,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Gagal load',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            color: Colors.grey[400],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -463,9 +695,12 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                         );
                       },
                     ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
+            // ── Action Buttons ──
             if (canStart)
               ActionButton(
                 label: 'Mulai Pengerjaan',
@@ -475,6 +710,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                 onPressed: () => _updateStatus('in-progress'),
               ),
 
+            // ── Perubahan C: onPressed pakai _markDone ──
             if (canClose) ...[
               if (_photos.isEmpty)
                 Container(
@@ -511,9 +747,58 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                 color: Colors.green[700]!,
                 isLoading: _isUpdating,
                 disabled: _photos.isEmpty,
-                onPressed: () => _updateStatus('closed'),
+                onPressed: _markDone, // ← perubahan C
               ),
             ],
+
+            // ── Perubahan D: banner menunggu konfirmasi admin ──
+            if (isWaiting)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.purple[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.purple[200]!),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.hourglass_top_rounded,
+                      color: Colors.purple[700],
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Menunggu konfirmasi admin',
+                            style: TextStyle(
+                              color: Colors.purple[800],
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Admin sedang memverifikasi foto bukti dan '
+                            'mengkonfirmasi ke pelanggan. '
+                            'Ticket akan ditutup setelah admin approve.',
+                            style: TextStyle(
+                              color: Colors.purple[700],
+                              fontSize: 12,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             if (isClosed)
               Container(
@@ -554,9 +839,27 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
 }
 
 // ── Full Screen Photo Viewer ──────────────────────────────
-class _PhotoViewer extends StatelessWidget {
+class _PhotoViewer extends StatefulWidget {
   final String url;
-  const _PhotoViewer({required this.url});
+  final int current;
+  final int total;
+  const _PhotoViewer({required this.url, this.current = 1, this.total = 1});
+
+  @override
+  State<_PhotoViewer> createState() => _PhotoViewerState();
+}
+
+class _PhotoViewerState extends State<_PhotoViewer> {
+  bool _hintVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // Hint zoom otomatis hilang setelah 3 detik
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _hintVisible = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -564,17 +867,71 @@ class _PhotoViewer extends StatelessWidget {
     appBar: AppBar(
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
-      title: const Text('Foto Bukti'),
+      title: Text('Foto ${widget.current} dari ${widget.total}'),
     ),
-    body: Center(
-      child: InteractiveViewer(
-        child: Image.network(
-          url,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) =>
-              const Icon(Icons.broken_image, color: Colors.white70, size: 60),
+    body: Stack(
+      children: [
+        Center(
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 4.0,
+            child: CachedNetworkImage(
+              imageUrl: widget.url,
+              fit: BoxFit.contain,
+              placeholder: (_, __) => const Center(
+                child: CircularProgressIndicator(color: Colors.white54),
+              ),
+              errorWidget: (_, __, ___) => Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.broken_image,
+                    color: Colors.white54,
+                    size: 60,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Gagal memuat foto',
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
+        // Hint zoom — fade out otomatis
+        AnimatedOpacity(
+          opacity: _hintVisible ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 500),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 32),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.zoom_in, color: Colors.white70, size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'Cubit untuk zoom',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }

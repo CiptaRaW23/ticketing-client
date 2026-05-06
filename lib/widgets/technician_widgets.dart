@@ -1,3 +1,4 @@
+// lib/technician/widgets/technician_widgets.dart
 import 'package:flutter/material.dart';
 
 // ─────────────────────────────────────────
@@ -49,6 +50,154 @@ String formatDate(String? raw, {bool includeDay = false}) {
   } catch (_) {
     return raw;
   }
+}
+
+/// Timestamp relatif: "2 mnt lalu", "1 jam lalu", dst.
+String timeAgo(String? raw) {
+  if (raw == null || raw.isEmpty) return '';
+  try {
+    final dt = DateTime.parse(raw).toLocal();
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Baru saja';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} mnt lalu';
+    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
+    if (diff.inDays < 7) return '${diff.inDays} hari lalu';
+    return formatDate(raw);
+  } catch (_) {
+    return '';
+  }
+}
+
+// ─────────────────────────────────────────
+// SNACKBAR — SEMANTIK
+// ─────────────────────────────────────────
+
+enum SnackType { success, error, warning, info }
+
+void showSnack(BuildContext context, String msg) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(msg)));
+}
+
+void showSemanticSnack(
+  BuildContext context,
+  String title, {
+  String? subtitle,
+  SnackType type = SnackType.info,
+  Duration duration = const Duration(seconds: 3),
+}) {
+  if (!context.mounted) return;
+
+  final cfg = {
+    SnackType.success: _SnackCfg(
+      bg: const Color(0xFFEAF3DE),
+      textColor: const Color(0xFF27500A),
+      border: const Color(0xFF97C459),
+      iconBg: const Color(0xFF639922),
+      icon: Icons.check_rounded,
+    ),
+    SnackType.error: _SnackCfg(
+      bg: const Color(0xFFFCEBEB),
+      textColor: const Color(0xFF791F1F),
+      border: const Color(0xFFF09595),
+      iconBg: const Color(0xFFE24B4A),
+      icon: Icons.close_rounded,
+    ),
+    SnackType.warning: _SnackCfg(
+      bg: const Color(0xFFFAEEDA),
+      textColor: const Color(0xFF633806),
+      border: const Color(0xFFEF9F27),
+      iconBg: const Color(0xFFBA7517),
+      icon: Icons.warning_amber_rounded,
+    ),
+    SnackType.info: _SnackCfg(
+      bg: const Color(0xFFE6F1FB),
+      textColor: const Color(0xFF0C447C),
+      border: const Color(0xFF85B7EB),
+      iconBg: const Color(0xFF378ADD),
+      icon: Icons.info_outline_rounded,
+    ),
+  };
+
+  final c = cfg[type]!;
+
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        duration: duration,
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        behavior: SnackBarBehavior.floating,
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: c.bg,
+            border: Border.all(color: c.border, width: 0.5),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.07),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: c.iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(c.icon, color: Colors.white, size: 13),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: c.textColor,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(fontSize: 11, color: c.textColor),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+}
+
+class _SnackCfg {
+  final Color bg, textColor, border, iconBg;
+  final IconData icon;
+  const _SnackCfg({
+    required this.bg,
+    required this.textColor,
+    required this.border,
+    required this.iconBg,
+    required this.icon,
+  });
 }
 
 // ─────────────────────────────────────────
@@ -254,45 +403,51 @@ class DetailRow extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-// INFO ROW
+// INFO ROW  (ticket card & detail)
 // ─────────────────────────────────────────
 
 class InfoRow extends StatelessWidget {
   final IconData icon;
   final String text;
   final Color? color;
+  final VoidCallback? onTap; // ← baru: untuk nomor HP bisa di-tap
 
   const InfoRow({
     super.key,
     required this.icon,
     required this.text,
     this.color,
+    this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 4),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 1),
-          child: Icon(icon, size: 14, color: color ?? Colors.grey[500]),
-        ),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              color: color ?? Colors.grey[600],
-              height: 1.4,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 14, color: color ?? Colors.grey[500]),
           ),
-        ),
-      ],
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                color: color ?? Colors.grey[600],
+                height: 1.4,
+                decoration: onTap != null ? TextDecoration.underline : null,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -314,6 +469,11 @@ class StatusBanner extends StatelessWidget {
       'label': 'Sedang Dikerjakan',
       'icon': Icons.construction_outlined,
     },
+    'in-progress-done': {
+      // ← state virtual, tidak dari server
+      'label': 'Menunggu Verifikasi Admin',
+      'icon': Icons.hourglass_top_rounded,
+    },
     'closed': {
       'label': 'Ticket Selesai',
       'icon': Icons.check_circle_outline_rounded,
@@ -322,21 +482,27 @@ class StatusBanner extends StatelessWidget {
 
   Color get _fg => status == 'assigned'
       ? Colors.orange[700]!
-      : status == 'in-progress'
-      ? TechColors.primary
-      : Colors.green[700]!;
+      : status == 'closed'
+      ? Colors.green[700]!
+      : status == 'in-progress-done'
+      ? Colors.purple[700]!
+      : TechColors.primary;
 
   Color get _bg => status == 'assigned'
       ? Colors.orange[50]!
-      : status == 'in-progress'
-      ? const Color(0xFFE8F5E9)
-      : Colors.green[50]!;
+      : status == 'closed'
+      ? Colors.green[50]!
+      : status == 'in-progress-done'
+      ? Colors.purple[50]!
+      : const Color(0xFFE8F5E9);
 
   Color get _border => status == 'assigned'
       ? Colors.orange[200]!
-      : status == 'in-progress'
-      ? const Color(0xFFA5D6A7)
-      : Colors.green[200]!;
+      : status == 'closed'
+      ? Colors.green[200]!
+      : status == 'in-progress-done'
+      ? Colors.purple[200]!
+      : const Color(0xFFA5D6A7);
 
   @override
   Widget build(BuildContext context) {
@@ -418,21 +584,27 @@ class ActionButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-// ICON BOX (untuk bottom sheet)
+// ICON BOX (bottom sheet)
 // ─────────────────────────────────────────
 
 class IconBox extends StatelessWidget {
   final IconData icon;
   final Color color;
+  final Color? bgColor;
 
-  const IconBox({super.key, required this.icon, required this.color});
+  const IconBox({
+    super.key,
+    required this.icon,
+    required this.color,
+    this.bgColor,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
     width: 42,
     height: 42,
     decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
+      color: bgColor ?? color.withOpacity(0.1),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Icon(icon, color: color),
@@ -487,7 +659,7 @@ class StatCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-// INFO CARD (profile — label + daftar tile)
+// INFO CARD (profile)
 // ─────────────────────────────────────────
 
 class InfoCard extends StatelessWidget {
@@ -521,19 +693,21 @@ class InfoCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-// INFO TILE (profile — icon + label + value)
+// INFO TILE (profile)
 // ─────────────────────────────────────────
 
 class InfoTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final bool isEmpty; // ← baru: tampilkan merah jika belum diisi
 
   const InfoTile({
     super.key,
     required this.icon,
     required this.label,
     required this.value,
+    this.isEmpty = false,
   });
 
   @override
@@ -552,11 +726,12 @@ class InfoTile extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              value,
-              style: const TextStyle(
+              isEmpty ? 'Belum diisi  →' : value,
+              style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF1A1A2E),
+                color: isEmpty ? Colors.red[400] : const Color(0xFF1A1A2E),
                 fontWeight: FontWeight.w500,
+                fontStyle: isEmpty ? FontStyle.italic : FontStyle.normal,
               ),
             ),
           ],
@@ -567,50 +742,89 @@ class InfoTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-// EMPTY STATE
+// EMPTY STATE — kontekstual per tab
 // ─────────────────────────────────────────
 
 class EmptyState extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final String? emoji;
   final String message;
   final String? subtitle;
+  final VoidCallback? onRefresh;
 
   const EmptyState({
     super.key,
-    required this.icon,
+    this.icon,
+    this.emoji,
     required this.message,
     this.subtitle,
+    this.onRefresh,
   });
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 64, color: Colors.grey[300]),
-        const SizedBox(height: 12),
-        Text(
-          message,
-          style: TextStyle(
-            color: Colors.grey[500],
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF3DE),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Center(
+              child: emoji != null
+                  ? Text(emoji!, style: const TextStyle(fontSize: 28))
+                  : Icon(
+                      icon ?? Icons.assignment_outlined,
+                      size: 30,
+                      color: TechColors.primary,
+                    ),
+            ),
           ),
-        ),
-        if (subtitle != null) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 14),
           Text(
-            subtitle!,
-            style: TextStyle(color: Colors.grey[400], fontSize: 12),
+            message,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1A1A2E),
+            ),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              subtitle!,
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (onRefresh != null) ...[
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Refresh', style: TextStyle(fontSize: 13)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey[600],
+                side: BorderSide(color: Colors.grey[300]!),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
         ],
-      ],
+      ),
     ),
   );
 }
 
 // ─────────────────────────────────────────
-// CONFIRM DIALOG
+// CONFIRM DIALOG — dengan icon kontekstual
 // ─────────────────────────────────────────
 
 Future<bool> showConfirmDialog(
@@ -621,42 +835,98 @@ Future<bool> showConfirmDialog(
   String confirmLabel = 'Ya',
   Color confirmColor = TechColors.primary,
   Widget? titleWidget,
+  IconData? headerIcon,
+  Color? headerIconBg,
+  Color? headerIconColor,
 }) async {
   final result = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: titleWidget ?? Text(title),
-      content: Text(content),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: Text(cancelLabel),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: confirmColor,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+      title: Column(
+        children: [
+          if (headerIcon != null) ...[
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: headerIconBg ?? confirmColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                headerIcon,
+                color: headerIconColor ?? confirmColor,
+                size: 24,
+              ),
             ),
-          ),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: Text(confirmLabel),
+            const SizedBox(height: 12),
+          ],
+          titleWidget ??
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
+        ],
+      ),
+      content: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          content,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.5),
+        ),
+      ),
+      actionsAlignment: MainAxisAlignment.center,
+      actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      actions: [
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  cancelLabel,
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: confirmColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(
+                  confirmLabel,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     ),
   );
   return result == true;
-}
-
-// ─────────────────────────────────────────
-// SNACKBAR HELPER
-// ─────────────────────────────────────────
-
-void showSnack(BuildContext context, String msg) {
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
 }
 
 // ─────────────────────────────────────────
@@ -704,6 +974,81 @@ class AdminNoteBanner extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ─────────────────────────────────────────
+// UPLOAD PROGRESS BAR
+// ─────────────────────────────────────────
+
+class UploadProgressBar extends StatelessWidget {
+  final int progress; // 0–100
+  final String? fileName;
+
+  const UploadProgressBar({super.key, required this.progress, this.fileName});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.fromLTRB(0, 0, 0, 10),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: Colors.grey[200]!, width: 0.5),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: TechColors.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Mengunggah foto...',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              '$progress%',
+              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+        if (fileName != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            fileName!,
+            style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+          ),
+        ],
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: progress / 100,
+            backgroundColor: Colors.grey[100],
+            color: TechColors.primary,
+            minHeight: 4,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          'Jangan tutup layar saat upload',
+          style: TextStyle(fontSize: 10, color: Colors.grey[400]),
         ),
       ],
     ),

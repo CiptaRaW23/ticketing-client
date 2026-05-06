@@ -1,6 +1,7 @@
-// lib/technician/screens/technician_tasks_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../services/socket_service.dart';
 import 'technician_detail_screen.dart';
@@ -41,14 +42,20 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    SocketService().removeListenersByEvent(['newAssignment', 'ticketUpdated']);
+    SocketService().removeListenersByEvent([
+      'newAssignment',
+      'ticketUpdated',
+      'ticketClosed',
+      'confirmationRejected',
+    ]);
     super.dispose();
   }
 
   Future<void> _loadName() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted)
+    if (mounted) {
       setState(() => _techName = prefs.getString('userName') ?? 'Teknisi');
+    }
   }
 
   Future<void> _loadTickets() async {
@@ -60,21 +67,59 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
         setState(() => _tickets = raw.cast<Map<String, dynamic>>());
       }
     } catch (e) {
-      showSnack(context, ApiService.errorMessage(e));
+      showSemanticSnack(
+        context,
+        'Gagal memuat tiket',
+        subtitle: ApiService.errorMessage(e),
+        type: SnackType.error,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _setupSocket() {
-    SocketService().onNewAssignment((_) {
+    SocketService().onNewAssignment((data) {
       if (mounted) {
         _loadTickets();
-        showSnack(context, '📋 Ada tugas baru dari admin!');
+        // Ambil id ticket dari data socket jika tersedia
+        final ticketId = data?['ticketId']?.toString() ?? '';
+        showSemanticSnack(
+          context,
+          'Tugas baru diterima',
+          subtitle: ticketId.isNotEmpty
+              ? 'Ticket #$ticketId · Segera cek'
+              : 'Cek tab Pending',
+          type: SnackType.warning,
+        );
       }
     });
     SocketService().onTicketUpdatedTechnician((_) {
       if (mounted) _loadTickets();
+    });
+
+    SocketService().onTicketClosed((data) {
+      if (mounted) {
+        _loadTickets();
+        showSemanticSnack(
+          context,
+          'Ticket dikonfirmasi selesai',
+          subtitle: 'Admin telah approve pekerjaan kamu 👍',
+          type: SnackType.success,
+        );
+      }
+    });
+
+    SocketService().onConfirmationRejected((data) {
+      if (mounted) {
+        _loadTickets();
+        showSemanticSnack(
+          context,
+          'Admin meminta perbaikan lanjutan',
+          subtitle: 'Silakan lanjutkan pengerjaan ticket',
+          type: SnackType.warning,
+        );
+      }
     });
   }
 
@@ -83,38 +128,23 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
       final body = <String, dynamic>{'action': action};
       if (reason != null && reason.isNotEmpty) body['rejectReason'] = reason;
       await _api.post('/tickets/$ticketId/assignment/respond', body);
-      showSnack(
+      showSemanticSnack(
         context,
-        action == 'accept'
-            ? '✅ Tugas diterima! Status ticket → In Progress'
-            : '❌ Tugas ditolak',
+        action == 'accept' ? 'Tugas berhasil diterima' : 'Tugas ditolak',
+        subtitle: action == 'accept'
+            ? 'Status ticket → In Progress'
+            : 'Admin akan mendapat notifikasi',
+        type: action == 'accept' ? SnackType.success : SnackType.warning,
       );
       _loadTickets();
     } catch (e) {
-      showSnack(context, ApiService.errorMessage(e));
+      showSemanticSnack(
+        context,
+        'Gagal merespons tugas',
+        subtitle: ApiService.errorMessage(e),
+        type: SnackType.error,
+      );
     }
-  }
-
-  Future<void> _showRejectDialog(int ticketId) async {
-    final ctrl = TextEditingController();
-    final ok = await showConfirmDialog(
-      context,
-      title: '',
-      content: '',
-      confirmLabel: 'Tolak Tugas',
-      confirmColor: Colors.red,
-      titleWidget: const Row(
-        children: [
-          Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
-          SizedBox(width: 8),
-          Text('Tolak Tugas', style: TextStyle(fontSize: 17)),
-        ],
-      ),
-    );
-    // showConfirmDialog doesn't support custom content yet — use full dialog
-    ctrl.dispose();
-    if (!ok || !mounted) return;
-    await _respond(ticketId, 'reject', reason: ctrl.text.trim());
   }
 
   Future<void> _showFullRejectDialog(int ticketId) async {
@@ -122,12 +152,28 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Column(
           children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 22),
-            SizedBox(width: 8),
-            Text('Tolak Tugas', style: TextStyle(fontSize: 17)),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red[600],
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Tolak Tugas',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
           ],
         ),
         content: Column(
@@ -151,21 +197,46 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
             ),
           ],
         ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: Colors.grey[300]!),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'Batal',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
               ),
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Tolak Tugas'),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text(
+                    'Tolak Tugas',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -182,6 +253,7 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
       backgroundColor: TechColors.bg,
       body: Column(
         children: [
+          // ── Header ──
           Container(
             decoration: const BoxDecoration(
               gradient: TechColors.gradientAppBar,
@@ -209,7 +281,7 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
                                 ),
                               ),
                               const Text(
-                                'Teknisi',
+                                'Teknisi Lapangan',
                                 style: TextStyle(
                                   color: Colors.white70,
                                   fontSize: 12,
@@ -218,6 +290,7 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
                             ],
                           ),
                         ),
+                        // Badge tugas aktif
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
@@ -262,7 +335,7 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
             ),
           ),
 
-          // ── Body (scrollable) ──
+          // ── Body ──
           Expanded(
             child: _isLoading
                 ? const TechLoader()
@@ -272,9 +345,25 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
                     child: TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildList(_pending, showAccReject: true),
-                        _buildList(_active, showAccReject: false),
-                        _buildList(_done, showAccReject: false),
+                        _buildList(
+                          _pending,
+                          showAccReject: true,
+                          emptyMsg: 'Belum ada tugas pending',
+                          emptySub:
+                              'Tugas baru muncul otomatis saat admin assign ke kamu',
+                        ),
+                        _buildList(
+                          _active,
+                          showAccReject: false,
+                          emptyMsg: 'Tidak ada tugas aktif',
+                          emptySub: 'Terima dulu tugas dari tab Pending',
+                        ),
+                        _buildList(
+                          _done,
+                          showAccReject: false,
+                          emptyMsg: 'Belum ada tugas selesai',
+                          emptySub: 'Selesaikan ticket yang sedang aktif',
+                        ),
                       ],
                     ),
                   ),
@@ -287,12 +376,15 @@ class _TechnicianTasksScreenState extends State<TechnicianTasksScreen>
   Widget _buildList(
     List<Map<String, dynamic>> list, {
     required bool showAccReject,
+    required String emptyMsg,
+    required String emptySub,
   }) {
     if (list.isEmpty) {
-      return const EmptyState(
-        icon: Icons.assignment_outlined,
-        message: 'Tidak ada tugas',
-        subtitle: 'Tarik ke bawah untuk refresh',
+      return EmptyState(
+        emoji: showAccReject ? '📭' : (_active.isEmpty ? '🔧' : '✅'),
+        message: emptyMsg,
+        subtitle: emptySub,
+        onRefresh: _loadTickets,
       );
     }
     return ListView.builder(
@@ -356,6 +448,13 @@ class _TicketCard extends StatelessWidget {
     }
   }
 
+  Future<void> _callPhone(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final schedule = ticket['visitSchedule'] as Map<String, dynamic>?;
@@ -363,6 +462,8 @@ class _TicketCard extends StatelessWidget {
     final adminNote = assignments?.isNotEmpty == true
         ? (assignments!.first as Map<String, dynamic>)['adminNote'] as String?
         : null;
+    final createdAt = ticket['createdAt'] as String?;
+    final phone = ticket['user']?['phone'] as String?;
 
     return GestureDetector(
       onTap: onTap,
@@ -382,7 +483,7 @@ class _TicketCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // ── Header ──
             Container(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
               decoration: BoxDecoration(
@@ -420,13 +521,50 @@ class _TicketCard extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  // Badge "Baru" jika dibuat dalam 1 jam terakhir
+                  if (createdAt != null) ...[
+                    const SizedBox(width: 6),
+                    if (DateTime.now()
+                            .difference(DateTime.parse(createdAt))
+                            .inHours <
+                        1)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF3DE),
+                          border: Border.all(
+                            color: const Color(0xFF97C459),
+                            width: 0.5,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Baru',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF3B6D11),
+                          ),
+                        ),
+                      ),
+                  ],
                   const Spacer(),
+                  // Timestamp relatif
+                  if (createdAt != null)
+                    Text(
+                      timeAgo(createdAt),
+                      style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+                    ),
+                  const SizedBox(width: 4),
                   Icon(Icons.chevron_right, size: 18, color: Colors.grey[400]),
                 ],
               ),
             ),
 
-            // Body
+            // ── Body ──
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Column(
@@ -453,33 +591,76 @@ class _TicketCard extends StatelessWidget {
                       icon: Icons.location_on_outlined,
                       text: ticket['address'] as String,
                     ),
-                  if ((ticket['user']?['phone'] as String?)?.isNotEmpty == true)
+                  // Nomor HP bisa di-tap langsung telepon
+                  if (phone?.isNotEmpty == true)
                     InfoRow(
                       icon: Icons.phone_outlined,
-                      text: ticket['user']['phone'] as String,
+                      text: phone!,
                       color: TechColors.primary,
+                      onTap: () => _callPhone(phone),
                     ),
                   if (schedule != null) ...[
-                    const SizedBox(height: 2),
-                    InfoRow(
-                      icon: Icons.calendar_today_outlined,
-                      text: formatDate(
-                        schedule['scheduledDate'] as String?,
-                        includeDay: true,
+                    const SizedBox(height: 4),
+                    // Chip jadwal + estimasi dalam satu baris
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
                       ),
-                      color: TechColors.primary,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF3DE),
+                        border: Border.all(
+                          color: const Color(0xFF97C459),
+                          width: 0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.calendar_today_outlined,
+                            size: 12,
+                            color: TechColors.primary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            formatDate(
+                              schedule['scheduledDate'] as String?,
+                              includeDay: true,
+                            ),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: TechColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          if (schedule['estimatedDuration'] != null) ...[
+                            const Text(
+                              ' · ',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: TechColors.primary,
+                              ),
+                            ),
+                            Text(
+                              '${schedule['estimatedDuration']} mnt',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: TechColors.primary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                    if (schedule['estimatedDuration'] != null)
-                      InfoRow(
-                        icon: Icons.timer_outlined,
-                        text: 'Estimasi ${schedule['estimatedDuration']} menit',
-                        color: TechColors.primary,
-                      ),
-                    if ((schedule['note'] as String?)?.isNotEmpty == true)
+                    if ((schedule['note'] as String?)?.isNotEmpty == true) ...[
+                      const SizedBox(height: 4),
                       InfoRow(
                         icon: Icons.notes_outlined,
                         text: schedule['note'] as String,
                       ),
+                    ],
                   ],
                   if (adminNote != null && adminNote.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -519,7 +700,7 @@ class _TicketCard extends StatelessWidget {
               ),
             ),
 
-            // Tombol Acc / Reject
+            // ── Tombol Acc / Reject ──
             if (showAccReject)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
