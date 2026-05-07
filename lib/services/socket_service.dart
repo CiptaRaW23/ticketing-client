@@ -145,7 +145,7 @@ class SocketService {
     });
   }
 
-  // Dipanggil saat admin reject → teknisi harus lanjut kerja
+  // Dipanggil saat admin reject
   void onConfirmationRejected(Function(dynamic) callback) {
     _socket?.off('confirmationRejected');
     _socket?.on('confirmationRejected', (data) {
