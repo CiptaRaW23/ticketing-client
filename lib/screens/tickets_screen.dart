@@ -83,7 +83,14 @@ class _TicketsScreenState extends State<TicketsScreen> {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final addressCtrl = TextEditingController();
+
+    // [FIX 8] State untuk counter karakter dan validasi
+    int titleLen = 0;
+    int descLen = 0;
     bool isSubmitting = false;
+
+    const int minTitle = 10;
+    const int minDesc = 30;
 
     showModalBottomSheet(
       context: context,
@@ -92,142 +99,300 @@ class _TicketsScreenState extends State<TicketsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Text(
-                    'Keluhan Baru',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        builder: (ctx, setModalState) {
+          // Update counter saat teks berubah
+          titleCtrl.addListener(() {
+            setModalState(() => titleLen = titleCtrl.text.length);
+          });
+          descCtrl.addListener(() {
+            setModalState(() => descLen = descCtrl.text.length);
+          });
+
+          final isTitleValid = titleLen >= minTitle;
+          final isDescValid = descLen >= minDesc;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'Keluhan Baru',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // [FIX 8] Judul dengan counter karakter
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Judul Keluhan *',
+                    border: const OutlineInputBorder(),
+                    hintText: 'Contoh: Internet tidak bisa konek',
+                    // Counter dan pesan error
+                    counterText: '$titleLen karakter',
+                    errorText: titleLen > 0 && !isTitleValid
+                        ? 'Minimal $minTitle karakter (kurang ${minTitle - titleLen})'
+                        : null,
+                    suffixIcon: isTitleValid
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 18,
+                          )
+                        : null,
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) {},
+                ),
+                const SizedBox(height: 12),
+
+                // [FIX 8] Deskripsi dengan counter karakter
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: 'Deskripsi Keluhan *',
+                    border: const OutlineInputBorder(),
+                    hintText: 'Jelaskan masalah yang Anda alami...',
+                    alignLabelWithHint: true,
+                    counterText: '$descLen karakter',
+                    errorText: descLen > 0 && !isDescValid
+                        ? 'Minimal $minDesc karakter (kurang ${minDesc - descLen})'
+                        : null,
+                    suffixIcon: isDescValid
+                        ? const Padding(
+                            padding: EdgeInsets.only(bottom: 60),
+                            child: Icon(
+                              Icons.check_circle,
+                              color: Colors.green,
+                              size: 18,
+                            ),
+                          )
+                        : null,
+                  ),
+                  textCapitalization: TextCapitalization.sentences,
+                  onChanged: (_) {},
+                ),
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: addressCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Alamat (opsional)',
+                    border: OutlineInputBorder(),
+                    hintText: 'Kosongkan jika alamat sudah terdaftar',
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    // [FIX 8] Tombol hanya aktif jika validasi lolos
+                    onPressed: (isSubmitting || !isTitleValid || !isDescValid)
+                        ? null
+                        : () async {
+                            final title = titleCtrl.text.trim();
+                            final desc = descCtrl.text.trim();
+                            final address = addressCtrl.text.trim().isEmpty
+                                ? null
+                                : addressCtrl.text.trim();
+
+                            setModalState(() => isSubmitting = true);
+                            try {
+                              final newTicket = await _api.createTicket(
+                                title,
+                                desc,
+                                address: address,
+                              );
+
+                              if (ctx.mounted) Navigator.pop(ctx);
+
+                              if (mounted) {
+                                setState(() {
+                                  _tickets.insert(0, newTicket);
+                                });
+                                // [FIX 1] Ganti SnackBar dengan dialog konfirmasi
+                                _showTicketSuccessDialog(newTicket);
+                              }
+                            } catch (e) {
+                              setModalState(() => isSubmitting = false);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Gagal kirim: ${ApiService.errorMessage(e)}',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.grey[300],
+                    ),
+                    child: isSubmitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Kirim Keluhan',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // [FIX 1] Dialog konfirmasi setelah ticket berhasil dibuat
+  void _showTicketSuccessDialog(Ticket newTicket) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_circle_rounded,
+                color: Colors.green[700],
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Keluhan Berhasil Dikirim!',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tim kami akan segera menindaklanjuti keluhanmu.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Tampilkan ID ticket dengan jelas
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.tag, size: 14, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Nomor Ticket: ',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '${newTicket.id}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: titleCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Judul Keluhan *',
-                  border: OutlineInputBorder(),
-                  hintText: 'Contoh: Internet tidak bisa konek',
-                ),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descCtrl,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Deskripsi Keluhan *',
-                  border: OutlineInputBorder(),
-                  hintText: 'Jelaskan masalah yang Anda alami...',
-                  alignLabelWithHint: true,
-                ),
-                textCapitalization: TextCapitalization.sentences,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: addressCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Alamat (opsional)',
-                  border: OutlineInputBorder(),
-                  hintText: 'Kosongkan jika alamat sudah terdaftar',
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-              ),
-              const SizedBox(height: 20),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Catat nomor ini untuk referensi',
+              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          Column(
+            children: [
+              // Langsung buka chat ticket
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isSubmitting
-                      ? null
-                      : () async {
-                          final title = titleCtrl.text.trim();
-                          final desc = descCtrl.text.trim();
-                          final address = addressCtrl.text.trim().isEmpty
-                              ? null
-                              : addressCtrl.text.trim();
-
-                          if (title.isEmpty || desc.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Judul dan deskripsi wajib diisi',
-                                ),
-                              ),
-                            );
-                            return;
-                          }
-
-                          setModalState(() => isSubmitting = true);
-                          try {
-                            final newTicket = await _api.createTicket(
-                              title,
-                              desc,
-                              address: address,
-                            );
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (mounted) {
-                              setState(() {
-                                _tickets.insert(0, newTicket);
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('✅ Keluhan berhasil dikirim!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            setModalState(() => isSubmitting = false);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Gagal kirim: ${ApiService.errorMessage(e)}',
-                                  ),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _openChat(newTicket);
+                  },
+                  icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                  label: const Text('Buka Chat Ticket'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    backgroundColor: Colors.green, // CHANGED
+                    backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                  child: isSubmitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Kirim Keluhan',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Kembali ke daftar
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Kembali ke Daftar Ticket',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -344,7 +509,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
         onPressed: _showSubmitTicketDialog,
         icon: const Icon(Icons.add),
         label: const Text('Keluhan Baru'),
-        backgroundColor: Colors.green, // CHANGED
+        backgroundColor: Colors.green,
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/ticket.dart';
 import '../services/socket_service.dart';
 import '../services/api_service.dart';
@@ -22,6 +23,9 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   bool _isClosed = false;
 
+  // ── [FIX 3] Socket disconnect banner state ──
+  bool _isDisconnected = false;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +34,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
     _socket.joinRoom(widget.ticket.id);
     _socket.onNewMessage(_onNewMessage);
+
+    // [FIX 3] Pantau status koneksi secara real-time, bukan hanya saat kirim
+    _socket.onDisconnect(() {
+      if (mounted) setState(() => _isDisconnected = true);
+    });
+    _socket.onReconnect(() {
+      if (mounted) setState(() => _isDisconnected = false);
+    });
+
+    // Sinkronkan state awal dengan kondisi socket saat ini
+    if (mounted) {
+      setState(() => _isDisconnected = !_socket.isConnected);
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
   }
@@ -81,6 +98,9 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isSending || _isClosed) return;
 
+    // [FIX 3] Cegah kirim jika tidak terhubung — banner sudah tampil
+    if (!_socket.isConnected) return;
+
     setState(() => _isSending = true);
     _messageController.clear();
 
@@ -93,20 +113,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _messages.add(optimisticMsg));
     _scrollToBottom();
 
-    if (_socket.isConnected) {
-      _socket.sendMessage(widget.ticket.id, text);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '⚠️ Koneksi real-time terputus. Pesan mungkin tidak terkirim.',
-            ),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
+    _socket.sendMessage(widget.ticket.id, text);
 
     await Future.delayed(const Duration(milliseconds: 300));
     if (mounted) setState(() => _isSending = false);
@@ -121,6 +128,18 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  // [FIX 9] Salin ID ticket ke clipboard
+  void _copyTicketId() {
+    Clipboard.setData(ClipboardData(text: '${widget.ticket.id}'));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('ID ticket disalin'),
+        duration: Duration(seconds: 2),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,9 +147,20 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Ticket #${widget.ticket.id}',
-              style: const TextStyle(fontSize: 16),
+            // [FIX 9] Ticket ID bisa di-tap untuk salin
+            GestureDetector(
+              onTap: _copyTicketId,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Ticket #${widget.ticket.id}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.copy, size: 13, color: Colors.white54),
+                ],
+              ),
             ),
             Row(
               children: [
@@ -153,7 +183,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
-          // ── Banner kalau sudah closed ──
+          // ── Banner closed ──
           if (_isClosed)
             Container(
               width: double.infinity,
@@ -171,27 +201,42 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
 
+          // [FIX 3] Banner disconnect — persisten, hilang otomatis saat reconnect
+          if (_isDisconnected)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              color: Colors.orange[50],
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.signal_wifi_off,
+                    color: Colors.orange[700],
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Koneksi terputus — mencoba menghubungkan kembali...',
+                      style: TextStyle(color: Colors.orange[800], fontSize: 13),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.orange[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           // ── Daftar pesan ──
           Expanded(
             child: _messages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Colors.grey[300],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Belum ada pesan.\nMulai sampaikan keluhanmu!',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      ],
-                    ),
-                  )
+                ? _buildEmptyState()
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
@@ -203,6 +248,77 @@ class _ChatScreenState extends State<ChatScreen> {
           // ── Input area ──
           _buildInputArea(),
         ],
+      ),
+    );
+  }
+
+  // [FIX 2] Empty state informatif dan kontekstual
+  Widget _buildEmptyState() {
+    final isOpen =
+        widget.ticket.status == 'open' || widget.ticket.status == 'in-progress';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              isOpen
+                  ? 'Ticket telah dikirim!'
+                  : 'Belum ada pesan di ticket ini.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isOpen
+                  ? 'Tim kami akan segera membalas.\nKamu bisa mengirim detail tambahan atau foto pendukung di sini.'
+                  : 'Mulai sampaikan keluhanmu!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+            if (isOpen) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.green[200]!),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.access_time, size: 13, color: Colors.green[700]),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Estimasi respons: < 24 jam',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -226,7 +342,6 @@ class _ChatScreenState extends State<ChatScreen> {
     Color bubbleColor;
     Color textColor;
     if (isMe) {
-      // CHANGED: biru → hijau
       bubbleColor = isOptimistic ? Colors.green[300]! : Colors.green[600]!;
       textColor = Colors.white;
     } else if (isBot) {
@@ -288,7 +403,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 if (isMe && isOptimistic) ...[
                   const SizedBox(width: 4),
-                  Icon(Icons.access_time, size: 10, color: Colors.white60),
+                  const Icon(
+                    Icons.access_time,
+                    size: 10,
+                    color: Colors.white60,
+                  ),
                 ],
               ],
             ),
@@ -299,6 +418,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildInputArea() {
+    // [FIX 3] Nonaktifkan input saat disconnect agar pengguna sadar tidak bisa kirim
+    final canSend = !_isClosed && !_isDisconnected;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
       decoration: BoxDecoration(
@@ -318,10 +440,12 @@ class _ChatScreenState extends State<ChatScreen> {
             Expanded(
               child: TextField(
                 controller: _messageController,
-                enabled: !_isClosed,
+                enabled: canSend,
                 decoration: InputDecoration(
                   hintText: _isClosed
                       ? 'Ticket sudah selesai'
+                      : _isDisconnected
+                      ? 'Tidak dapat mengirim — koneksi terputus'
                       : 'Ketik pesan...',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
@@ -330,7 +454,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     horizontal: 16,
                     vertical: 10,
                   ),
-                  filled: _isClosed,
+                  filled: !canSend,
                   fillColor: Colors.grey[100],
                 ),
                 onSubmitted: (_) => _sendMessage(),
@@ -348,15 +472,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 : IconButton(
                     icon: Icon(
                       Icons.send_rounded,
-                      // CHANGED: biru → hijau
-                      color: _isClosed ? Colors.grey : Colors.green,
+                      color: canSend ? Colors.green : Colors.grey,
                     ),
-                    onPressed: _isClosed ? null : _sendMessage,
+                    onPressed: canSend ? _sendMessage : null,
                     style: IconButton.styleFrom(
-                      // CHANGED: biru → hijau
-                      backgroundColor: _isClosed
-                          ? Colors.grey[100]
-                          : Colors.green[50],
+                      backgroundColor: canSend
+                          ? Colors.green[50]
+                          : Colors.grey[100],
                     ),
                   ),
           ],
@@ -372,7 +494,7 @@ class _ChatScreenState extends State<ChatScreen> {
         c = Colors.orange;
         break;
       case 'in-progress':
-        c = Colors.blue[300]!; // tetap biru — ini indikator status
+        c = Colors.blue[300]!;
         break;
       case 'closed':
         c = Colors.green;
@@ -451,7 +573,6 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // CHANGED: biru → hijau
           Icon(icon, size: 18, color: Colors.green),
           const SizedBox(width: 10),
           Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w600)),
