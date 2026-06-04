@@ -22,14 +22,15 @@ class _TypingIndicatorState extends State<TypingIndicator>
       3,
       (i) => AnimationController(
         vsync: this,
-        duration: const Duration(milliseconds: 600),
-      )..repeat(reverse: true),
+        duration: const Duration(milliseconds: 500),
+      ),
     );
     _animations = List.generate(3, (i) {
-      Future.delayed(Duration(milliseconds: i * 150), () {
-        if (mounted) _controllers[i].forward();
+      // Stagger setiap dot supaya gelombang terasa alami
+      Future.delayed(Duration(milliseconds: i * 160), () {
+        if (mounted) _controllers[i].repeat(reverse: true);
       });
-      return Tween<double>(begin: 0, end: -6).animate(
+      return Tween<double>(begin: 0, end: -5).animate(
         CurvedAnimation(parent: _controllers[i], curve: Curves.easeInOut),
       );
     });
@@ -52,23 +53,23 @@ class _TypingIndicatorState extends State<TypingIndicator>
           const BotAvatar(),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-                bottomLeft: Radius.circular(3),
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomRight: Radius.circular(18),
+                bottomLeft: Radius.circular(4),
               ),
+              border: Border.all(color: const Color(0xFFE8EDF2)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 4,
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
-              border: Border.all(color: const Color(0xFFEEF2F7)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -78,11 +79,15 @@ class _TypingIndicatorState extends State<TypingIndicator>
                   builder: (_, __) => Transform.translate(
                     offset: Offset(0, _animations[i].value),
                     child: Container(
-                      margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+                      margin: EdgeInsets.only(right: i < 2 ? 5 : 0),
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.5),
+                        color: [
+                          const Color(0xFF1B5E20),
+                          const Color(0xFF388E3C),
+                          const Color(0xFF66BB6A),
+                        ][i],
                         shape: BoxShape.circle,
                       ),
                     ),

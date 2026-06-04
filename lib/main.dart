@@ -92,15 +92,6 @@ class _SplashCheckState extends State<SplashCheck> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset('assets/logo.png', width: 180, height: 180),
-              const SizedBox(height: 20),
-              Text(
-                'ISP Customer App',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green[900],
-                ),
-              ),
               const SizedBox(height: 40),
               SizedBox(
                 width: 24,

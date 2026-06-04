@@ -1,3 +1,4 @@
+// services/api_service.dart
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
@@ -20,17 +21,14 @@ class ApiService {
     ),
   );
 
-  // ── Interceptors ──
-
+  // ── Interceptors ──────────────────────────────────────────
   void _setupInterceptors() {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           final prefs = await SharedPreferences.getInstance();
           final token = prefs.getString('token');
-          if (token != null) {
-            options.headers['Authorization'] = 'Bearer $token';
-          }
+          if (token != null) options.headers['Authorization'] = 'Bearer $token';
           handler.next(options);
         },
         onError: (DioException e, handler) {
@@ -56,12 +54,28 @@ class ApiService {
         final serverMsg = e.response?.data is Map
             ? e.response?.data['error']
             : null;
-        if (statusCode == 401) {
-          message = serverMsg ?? 'Sesi habis, silakan login kembali';
+        if (statusCode == 400) {
+          message = serverMsg ?? 'Data tidak valid';
+        } else if (statusCode == 401) {
+          final errMsg =
+              ((e.response?.data is Map ? e.response?.data['error'] : null) ??
+                      '')
+                  .toString()
+                  .toLowerCase();
+          if (errMsg.contains('inactive') ||
+              errMsg.contains('nonaktif') ||
+              errMsg.contains('pending') ||
+              errMsg.contains('belum')) {
+            message = serverMsg ?? 'Akun belum diaktifkan oleh admin';
+          } else {
+            message = serverMsg ?? 'Sesi habis, silakan login kembali';
+          }
         } else if (statusCode == 403) {
           message = serverMsg ?? 'Akses ditolak';
         } else if (statusCode == 404) {
           message = serverMsg ?? 'Data tidak ditemukan';
+        } else if (statusCode == 409) {
+          message = serverMsg ?? 'Data sudah terdaftar / sudah digunakan';
         } else if (statusCode != null && statusCode >= 500) {
           message = 'Terjadi kesalahan di server. Coba lagi nanti.';
         } else {
@@ -81,43 +95,36 @@ class ApiService {
   }
 
   static String errorMessage(Object e) {
-    if (e is DioException) {
-      return e.error?.toString() ?? 'Terjadi kesalahan';
-    }
+    if (e is DioException) return e.error?.toString() ?? 'Terjadi kesalahan';
     return e.toString();
   }
 
-  // ── Generic methods (dipakai teknisi screen) ──
-
-  /// GET request — return raw Map/List dari server
+  // ── Generic methods ───────────────────────────────────────
   Future<dynamic> get(String path, {Map<String, dynamic>? query}) async {
     final response = await _dio.get('/api$path', queryParameters: query);
     return response.data;
   }
 
-  /// POST request — return raw Map dari server
   Future<dynamic> post(String path, [Map<String, dynamic>? body]) async {
     final response = await _dio.post('/api$path', data: body);
     return response.data;
   }
 
-  /// PATCH request — return raw Map dari server
   Future<dynamic> patch(String path, [Map<String, dynamic>? body]) async {
     final response = await _dio.patch('/api$path', data: body);
     return response.data;
   }
 
-  /// DELETE request — return raw Map dari server
   Future<dynamic> delete(String path) async {
     final response = await _dio.delete('/api$path');
     return response.data;
   }
 
-  // ── Getter Dio untuk upload multipart (dipakai teknisi upload foto) ──
   Dio get dio => _dio;
 
   // ==================== AUTH ====================
 
+  // ── Login ─────────────────────────────────────────────────
   Future<Map<String, dynamic>> login(String username, String password) async {
     final response = await _dio.post(
       '/api/login',
@@ -126,9 +133,51 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
+  // ── Logout ────────────────────────────────────────────────
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+  }
+
+  // ==================== REGISTER ====================
+
+  // ── Step 1: Validasi nomor HP ke CustomerRegistry ─────────
+  // Memanggil GET /api/register/validate-phone?phone=08xxx
+  // Response sukses : { valid: true, name: "...", address: "..." }
+  // Response error  : DioException dengan pesan dari server
+  Future<Map<String, dynamic>> validatePhone(String phone) async {
+    final response = await _dio.get(
+      '/api/register/validate-phone',
+      queryParameters: {'phone': phone},
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  // ── Step 2: Register pelanggan baru ───────────────────────
+  // Memanggil POST /api/register
+  // Body: { phone, username, name, address, password }
+  // Akun langsung aktif karena no. HP sudah divalidasi via CustomerRegistry
+  Future<Map<String, dynamic>> register({
+    required String phone,
+    required String username,
+    required String name,
+    required String address,
+    required String password,
+  }) async {
+    final response = await _dio.post(
+      '/api/register',
+      data: {
+        'phone': phone,
+        'username': username,
+        'name': name,
+        'address': address.isNotEmpty ? address : null,
+        'password': password,
+        'role': 'customer',
+        'status':
+            'active', // langsung aktif karena no. HP sudah divalidasi admin
+      },
+    );
+    return response.data as Map<String, dynamic>;
   }
 
   // ==================== TICKETS ====================
@@ -136,7 +185,6 @@ class ApiService {
   Future<List<Ticket>> getTickets() async {
     final response = await _dio.get('/api/tickets');
     final data = response.data;
-    // Support both array dan {success, tickets}
     final list = data is List ? data : (data['tickets'] ?? []);
     return (list as List)
         .map((json) => Ticket.fromJson(json as Map<String, dynamic>))
@@ -146,7 +194,6 @@ class ApiService {
   Future<Ticket> getTicketDetail(int id) async {
     final response = await _dio.get('/api/tickets/$id');
     final data = response.data;
-    // Support both {ticket: ...} dan flat ticket object
     final ticketData = data is Map && data.containsKey('ticket')
         ? data['ticket']
         : data;
