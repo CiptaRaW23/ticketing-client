@@ -281,12 +281,6 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
                                 value: _field('email'),
                                 isEmpty: _isEmpty('email'),
                               ),
-                              InfoTile(
-                                icon: Icons.location_on_outlined,
-                                label: 'Alamat',
-                                value: _field('address'),
-                                isEmpty: _isEmpty('address'),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 16),

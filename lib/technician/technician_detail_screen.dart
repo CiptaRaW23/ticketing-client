@@ -21,6 +21,8 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
   final _api = ApiService();
   final _picker = ImagePicker();
 
+  final TextEditingController _captionController = TextEditingController();
+
   bool _isLoading = false;
   bool _isUploading = false;
   bool _isUpdating = false;
@@ -212,7 +214,10 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: OutlinedButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () {
+                  FocusScope.of(ctx).unfocus();
+                  Navigator.pop(ctx);
+                },
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(44),
                   side: BorderSide(color: Colors.grey[300]!),
@@ -243,7 +248,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
 
       // Dialog keterangan foto
       String caption = '';
-      final ctrl = TextEditingController();
+      _captionController.clear();
       await showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -255,7 +260,7 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
           ),
           content: TextField(
-            controller: ctrl,
+            controller: _captionController,
             decoration: InputDecoration(
               hintText: 'Contoh: Kondisi kabel setelah diperbaiki (opsional)',
               border: OutlineInputBorder(
@@ -265,7 +270,10 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                FocusScope.of(ctx).unfocus();
+                Navigator.pop(ctx);
+              },
               child: const Text('Lewati'),
             ),
             ElevatedButton(
@@ -277,7 +285,8 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
                 ),
               ),
               onPressed: () {
-                caption = ctrl.text.trim();
+                caption = _captionController.text.trim();
+                FocusScope.of(ctx).unfocus();
                 Navigator.pop(ctx);
               },
               child: const Text('OK'),
@@ -285,7 +294,6 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
           ],
         ),
       );
-      ctrl.dispose();
 
       if (!mounted) return;
       setState(() {
@@ -835,6 +843,12 @@ class _TechnicianDetailScreenState extends State<TechnicianDetailScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _captionController.dispose();
+    super.dispose();
   }
 }
 
