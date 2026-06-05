@@ -66,7 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirm == true) {
-      SocketService().dispose();
+      SocketService().disconnect();
       await _api.logout();
 
       if (!mounted) return;

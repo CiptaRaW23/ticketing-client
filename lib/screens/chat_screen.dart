@@ -13,7 +13,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   final SocketService _socket = SocketService();
@@ -23,7 +23,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   bool _isClosed = false;
 
-  // ── [FIX 3] Socket disconnect banner state ──
   bool _isDisconnected = false;
 
   @override
@@ -35,7 +34,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _socket.joinRoom(widget.ticket.id);
     _socket.onNewMessage(_onNewMessage);
 
-    // [FIX 3] Pantau status koneksi secara real-time, bukan hanya saat kirim
     _socket.onDisconnect(() {
       if (mounted) setState(() => _isDisconnected = true);
     });
@@ -43,12 +41,24 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) setState(() => _isDisconnected = false);
     });
 
-    // Sinkronkan state awal dengan kondisi socket saat ini
+    _socket.joinRoom(widget.ticket.id);
+
+    _socket.onNewMessage(_onNewMessage);
+
     if (mounted) {
       setState(() => _isDisconnected = !_socket.isConnected);
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_socket.isConnected) {
+      _socket.init();
+      _socket.joinRoom(widget.ticket.id);
+      _socket.onNewMessage(_onNewMessage);
+    }
   }
 
   void _onNewMessage(dynamic data) {
@@ -586,7 +596,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    _socket.removeListeners();
+    WidgetsBinding.instance.removeObserver(this);
+    _socket.removeChatListeners();
+    _socket.leaveRoom(widget.ticket.id);
     _scrollController.dispose();
     _messageController.dispose();
     super.dispose();

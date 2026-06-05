@@ -25,8 +25,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
     super.initState();
     _loadTickets();
 
-    _socket.init();
-
     _socket.onTicketUpdated((_) {
       if (mounted) _loadTickets();
     });

@@ -9,13 +9,17 @@ class SocketService {
   IO.Socket? _socket;
   bool _initialized = false;
 
-  // [FIX 3] Daftar callback disconnect/reconnect agar bisa dipantau dari luar
+  int? _activeTicketRoom;
+  Function(dynamic)? _newMessageCallback;
+
   final List<Function()> _disconnectCallbacks = [];
   final List<Function()> _reconnectCallbacks = [];
 
   // ── Init & Connect ──
 
   void init() {
+    print('[Socket] INIT DIPANGGIL');
+
     if (_initialized && (_socket?.connected ?? false)) {
       print('[Socket] ✅ Sudah terhubung, skip init');
       return;
@@ -25,49 +29,45 @@ class SocketService {
     _initialized = false;
 
     _socket = IO.io(serverUrl, <String, dynamic>{
-      'transports': ['websocket', 'polling'],
-      'autoConnect': true,
+      'transports': ['websocket'],
+      'autoConnect': false,
       'reconnection': true,
       'reconnectionAttempts': 10,
       'reconnectionDelay': 1000,
     });
+
+    print('[Socket] SOCKET CREATED');
+
+    _socket!.connect();
+
+    print('[Socket] CONNECT DIPANGGIL');
 
     _socket!.onConnect((_) {
       _initialized = true;
       print('[Socket] ✅ Connected: ${_socket!.id}');
     });
 
+    _socket!.onConnectError((err) {
+      print('[Socket] ❌ Connect error: $err');
+    });
+
+    _socket!.onError((err) {
+      print('[Socket] ❌ Error: $err');
+    });
+
     _socket!.onDisconnect((_) {
       _initialized = false;
       print('[Socket] ❌ Disconnected');
-      // [FIX 3] Beritahu semua listener disconnect
-      for (final cb in _disconnectCallbacks) {
-        cb();
-      }
     });
-
-    _socket!.onReconnect((_) {
-      print('[Socket] 🔄 Reconnected');
-      // [FIX 3] Beritahu semua listener reconnect
-      for (final cb in _reconnectCallbacks) {
-        cb();
-      }
-    });
-
-    _socket!.onConnectError((err) => print('[Socket] ❌ Connect error: $err'));
-    _socket!.onError((err) => print('[Socket] ❌ Error: $err'));
   }
 
   bool get isConnected => _socket?.connected ?? false;
-
-  // ── [FIX 3] Registrasi callback status koneksi ──
 
   /// Dipanggil saat socket terputus dari server
   void onDisconnect(Function() callback) {
     _disconnectCallbacks.add(callback);
   }
 
-  /// Dipanggil saat socket berhasil terhubung kembali
   void onReconnect(Function() callback) {
     _reconnectCallbacks.add(callback);
   }
@@ -75,16 +75,16 @@ class SocketService {
   // ── Rooms ──
 
   void joinRoom(int ticketId, {int retryCount = 0}) {
+    _activeTicketRoom = ticketId;
+
     if (_socket?.connected ?? false) {
       _socket!.emit('joinTicketRoom', ticketId);
       print('[Socket] 📨 Joined room: ticket-$ticketId');
     } else {
-      if (retryCount >= 10) {
-        print('[Socket] ⚠️ Gagal join room setelah 10x retry');
-        return;
-      }
-      Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
-        joinRoom(ticketId, retryCount: retryCount + 1);
+      print('[Socket] ⏳ Tunggu connect lalu join room: $ticketId');
+      _socket?.once('connect', (_) {
+        _socket!.emit('joinTicketRoom', ticketId);
+        print('[Socket] 📨 Joined room (setelah connect): ticket-$ticketId');
       });
     }
   }
@@ -99,6 +99,13 @@ class SocketService {
         joinTechnicianRoom(technicianId, retryCount: retryCount + 1);
       });
     }
+  }
+
+  void leaveRoom(int ticketId) {
+    _socket?.emit('leaveTicketRoom', ticketId);
+    _activeTicketRoom = null;
+    _newMessageCallback = null;
+    print('[Socket] 🚪 Left room: ticket-$ticketId');
   }
 
   // ── Send ──
@@ -118,11 +125,18 @@ class SocketService {
   // ── Listeners Customer ──
 
   void onNewMessage(Function(dynamic) callback) {
+    _newMessageCallback = callback;
+
     _socket?.off('newMessage');
-    _socket?.on('newMessage', (data) {
-      print('[Socket] 📩 newMessage');
-      callback(data);
-    });
+
+    if (_socket?.connected ?? false) {
+      _socket?.on('newMessage', (data) {
+        print('[Socket] 📩 newMessage');
+        callback(data);
+      });
+    } else {
+      print('[Socket] ⏳ newMessage listener akan didaftarkan setelah connect');
+    }
   }
 
   void onTicketUpdated(Function(dynamic) callback) {
@@ -185,11 +199,17 @@ class SocketService {
     _socket?.off('ticketClosed');
     _socket?.off('confirmationRejected');
 
-    // [FIX 3] Bersihkan juga callback status koneksi
     _disconnectCallbacks.clear();
     _reconnectCallbacks.clear();
 
     print('[Socket] 🧹 Listeners removed');
+  }
+
+  void removeChatListeners() {
+    _socket?.off('newMessage');
+    _disconnectCallbacks.clear();
+    _reconnectCallbacks.clear();
+    print('[Socket] 🧹 Chat listeners removed');
   }
 
   void removeListenersByEvent(List<String> events) {
@@ -201,8 +221,21 @@ class SocketService {
   // ── Disconnect / Dispose ──
 
   void disconnect() {
+    _socket?.off('newMessage');
+    _socket?.off('ticketUpdated');
+    _socket?.off('newTicket');
+    _socket?.off('newAssignment');
+    _socket?.off('ticketClosed');
+    _socket?.off('confirmationRejected');
+    _disconnectCallbacks.clear();
+    _reconnectCallbacks.clear();
+
     _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
     _initialized = false;
+    _activeTicketRoom = null;
+    _newMessageCallback = null;
     print('[Socket] 🔌 Disconnected (manual)');
   }
 

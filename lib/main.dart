@@ -3,9 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'technician/technician_navigation.dart';
+import 'services/socket_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SocketService().init();
   runApp(const MyApp());
 }
 
