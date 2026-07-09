@@ -29,7 +29,6 @@ class _TechnicianNavigationState extends State<TechnicianNavigation> {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getInt('userId') ?? 0;
     if (userId > 0) {
-      // Join room teknisi agar bisa terima notifikasi assignment real-time
       SocketService().joinTechnicianRoom(userId);
     }
   }

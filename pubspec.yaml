@@ -18,10 +18,22 @@ dependencies:
   cached_network_image: ^3.3.1
   url_launcher: ^6.2.5
 
+  firebase_core: ^3.15.0
+  firebase_messaging: ^15.0.0
+  flutter_local_notifications: ^17.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo_app.png"
+  adaptive_icon_background: "#0A3D0A"
+  adaptive_icon_foreground: "assets/logo_app.png"
 
 flutter:
   uses-material-design: true

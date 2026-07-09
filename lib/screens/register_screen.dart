@@ -188,7 +188,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A1A1A),
+                    backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -356,7 +356,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: ElevatedButton(
             onPressed: _isValidatingPhone ? null : _validatePhone,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A1A1A),
+              backgroundColor: Colors.green,
               foregroundColor: Colors.white,
               disabledBackgroundColor: Colors.grey[300],
               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -401,7 +401,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A1A1A),
+                  color: Colors.green,
                 ),
               ),
             ),
@@ -634,7 +634,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: ElevatedButton(
               onPressed: _isSubmitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1A1A1A),
+                backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey[300],
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -700,7 +700,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Color(0xFF1A1A1A), width: 1.5),
+      borderSide: const BorderSide(color: Colors.green, width: 1.5),
     ),
     errorBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
@@ -728,7 +728,7 @@ class _StepDot extends StatelessWidget {
     final Color bg = done
         ? const Color(0xFF2E7D32)
         : active
-        ? const Color(0xFF1A1A1A)
+        ? Colors.green
         : Colors.grey[300]!;
     final Widget child = done
         ? const Icon(Icons.check_rounded, color: Colors.white, size: 14)

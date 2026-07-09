@@ -15,6 +15,9 @@ class SocketService {
   final List<Function()> _disconnectCallbacks = [];
   final List<Function()> _reconnectCallbacks = [];
 
+  // expose socket untuk keperluan luar
+  IO.Socket? get socket => _socket;
+
   // ── Init & Connect ──
 
   void init() {
@@ -37,9 +40,7 @@ class SocketService {
     });
 
     print('[Socket] SOCKET CREATED');
-
     _socket!.connect();
-
     print('[Socket] CONNECT DIPANGGIL');
 
     _socket!.onConnect((_) {
@@ -63,7 +64,6 @@ class SocketService {
 
   bool get isConnected => _socket?.connected ?? false;
 
-  /// Dipanggil saat socket terputus dari server
   void onDisconnect(Function() callback) {
     _disconnectCallbacks.add(callback);
   }
@@ -74,7 +74,7 @@ class SocketService {
 
   // ── Rooms ──
 
-  void joinRoom(int ticketId, {int retryCount = 0}) {
+  void joinRoom(int ticketId) {
     _activeTicketRoom = ticketId;
 
     if (_socket?.connected ?? false) {
@@ -89,14 +89,16 @@ class SocketService {
     }
   }
 
-  void joinTechnicianRoom(int technicianId, {int retryCount = 0}) {
+  void joinTechnicianRoom(int technicianId) {
     if (_socket?.connected ?? false) {
       _socket!.emit('joinTechnicianRoom', technicianId);
       print('[Socket] 🔧 Joined technician room: $technicianId');
     } else {
-      if (retryCount >= 10) return;
-      Future.delayed(Duration(milliseconds: 500 * (retryCount + 1)), () {
-        joinTechnicianRoom(technicianId, retryCount: retryCount + 1);
+      _socket?.once('connect', (_) {
+        _socket!.emit('joinTechnicianRoom', technicianId);
+        print(
+          '[Socket] 🔧 Joined technician room (setelah connect): $technicianId',
+        );
       });
     }
   }
@@ -126,7 +128,6 @@ class SocketService {
 
   void onNewMessage(Function(dynamic) callback) {
     _newMessageCallback = callback;
-
     _socket?.off('newMessage');
 
     if (_socket?.connected ?? false) {
@@ -135,58 +136,124 @@ class SocketService {
         callback(data);
       });
     } else {
-      print('[Socket] ⏳ newMessage listener akan didaftarkan setelah connect');
+      _socket?.once('connect', (_) {
+        _socket?.off('newMessage');
+        _socket?.on('newMessage', (data) {
+          print('[Socket] 📩 newMessage (setelah connect)');
+          callback(data);
+        });
+      });
     }
   }
 
   void onTicketUpdated(Function(dynamic) callback) {
     _socket?.off('ticketUpdated');
-    _socket?.on('ticketUpdated', (data) {
-      print('[Socket] 🔄 ticketUpdated');
-      callback(data);
-    });
+    if (_socket?.connected ?? false) {
+      _socket?.on('ticketUpdated', (data) {
+        print('[Socket] 🔄 ticketUpdated');
+        callback(data);
+      });
+    } else {
+      _socket?.once('connect', (_) {
+        _socket?.off('ticketUpdated');
+        _socket?.on('ticketUpdated', (data) {
+          print('[Socket] 🔄 ticketUpdated (setelah connect)');
+          callback(data);
+        });
+      });
+    }
   }
 
   void onNewTicket(Function(dynamic) callback) {
     _socket?.off('newTicket');
-    _socket?.on('newTicket', (data) {
-      print('[Socket] 🎫 newTicket');
-      callback(data);
-    });
+    if (_socket?.connected ?? false) {
+      _socket?.on('newTicket', (data) {
+        print('[Socket] 🎫 newTicket');
+        callback(data);
+      });
+    } else {
+      _socket?.once('connect', (_) {
+        _socket?.off('newTicket');
+        _socket?.on('newTicket', (data) {
+          print('[Socket] 🎫 newTicket (setelah connect)');
+          callback(data);
+        });
+      });
+    }
   }
 
   // ── Listeners Teknisi ──
 
   void onNewAssignment(Function(dynamic) callback) {
     _socket?.off('newAssignment');
-    _socket?.on('newAssignment', (data) {
-      print('[Socket] 📋 newAssignment');
-      callback(data);
-    });
+    if (_socket?.connected ?? false) {
+      _socket?.on('newAssignment', (data) {
+        print('[Socket] 📋 newAssignment');
+        callback(data);
+      });
+    } else {
+      _socket?.once('connect', (_) {
+        _socket?.off('newAssignment');
+        _socket?.on('newAssignment', (data) {
+          print('[Socket] 📋 newAssignment (setelah connect)');
+          callback(data);
+        });
+      });
+    }
   }
 
   void onTicketUpdatedTechnician(Function(dynamic) callback) {
     _socket?.off('ticketUpdated');
-    _socket?.on('ticketUpdated', (data) {
-      print('[Socket] 🔄 ticketUpdated (teknisi)');
-      callback(data);
-    });
+    if (_socket?.connected ?? false) {
+      _socket?.on('ticketUpdated', (data) {
+        print('[Socket] 🔄 ticketUpdated (teknisi)');
+        callback(data);
+      });
+    } else {
+      _socket?.once('connect', (_) {
+        _socket?.off('ticketUpdated');
+        _socket?.on('ticketUpdated', (data) {
+          print('[Socket] 🔄 ticketUpdated teknisi (setelah connect)');
+          callback(data);
+        });
+      });
+    }
   }
 
   void onTicketClosed(Function(dynamic) callback) {
     _socket?.off('ticketClosed');
-    _socket?.on('ticketClosed', (data) {
-      print('[Socket] ✅ ticketClosed');
-      callback(data);
-    });
+    if (_socket?.connected ?? false) {
+      _socket?.on('ticketClosed', (data) {
+        print('[Socket] ✅ ticketClosed');
+        callback(data);
+      });
+    } else {
+      _socket?.once('connect', (_) {
+        _socket?.off('ticketClosed');
+        _socket?.on('ticketClosed', (data) {
+          print('[Socket] ✅ ticketClosed (setelah connect)');
+          callback(data);
+        });
+      });
+    }
   }
 
   void onConfirmationRejected(Function(dynamic) callback) {
     _socket?.off('confirmationRejected');
-    _socket?.on('confirmationRejected', (data) {
-      print('[Socket] ↩️ confirmationRejected');
-      callback(data);
-    });
+    if (_socket?.connected ?? false) {
+      _socket?.on('confirmationRejected', (data) {
+        print('[Socket] ↩️ confirmationRejected');
+        callback(data);
+      });
+    } else {
+      _socket?.once('connect', (_) {
+        _socket?.off('confirmationRejected');
+        _socket?.on('confirmationRejected', (data) {
+          print('[Socket] ↩️ confirmationRejected (setelah connect)');
+          callback(data);
+        });
+      });
+    }
   }
 
   // ── Remove Listeners ──
@@ -198,10 +265,8 @@ class SocketService {
     _socket?.off('newAssignment');
     _socket?.off('ticketClosed');
     _socket?.off('confirmationRejected');
-
     _disconnectCallbacks.clear();
     _reconnectCallbacks.clear();
-
     print('[Socket] 🧹 Listeners removed');
   }
 
@@ -229,7 +294,6 @@ class SocketService {
     _socket?.off('confirmationRejected');
     _disconnectCallbacks.clear();
     _reconnectCallbacks.clear();
-
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

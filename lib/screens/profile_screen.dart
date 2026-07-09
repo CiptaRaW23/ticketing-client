@@ -66,6 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (confirm == true) {
+      await _api.deleteFcmToken();
       SocketService().disconnect();
       await _api.logout();
 

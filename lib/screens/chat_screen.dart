@@ -41,10 +41,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (mounted) setState(() => _isDisconnected = false);
     });
 
-    _socket.joinRoom(widget.ticket.id);
-
-    _socket.onNewMessage(_onNewMessage);
-
     if (mounted) {
       setState(() => _isDisconnected = !_socket.isConnected);
     }

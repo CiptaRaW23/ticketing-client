@@ -141,10 +141,7 @@ class ApiService {
 
   // ==================== REGISTER ====================
 
-  // ── Step 1: Validasi nomor HP ke CustomerRegistry ─────────
   // Memanggil GET /api/register/validate-phone?phone=08xxx
-  // Response sukses : { valid: true, name: "...", address: "..." }
-  // Response error  : DioException dengan pesan dari server
   Future<Map<String, dynamic>> validatePhone(String phone) async {
     final response = await _dio.get(
       '/api/register/validate-phone',
@@ -153,10 +150,7 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
-  // ── Step 2: Register pelanggan baru ───────────────────────
   // Memanggil POST /api/register
-  // Body: { phone, username, name, address, password }
-  // Akun langsung aktif karena no. HP sudah divalidasi via CustomerRegistry
   Future<Map<String, dynamic>> register({
     required String phone,
     required String username,
@@ -239,5 +233,25 @@ class ApiService {
       '/api/user/change-password',
       data: {'oldPassword': oldPassword, 'newPassword': newPassword},
     );
+  }
+
+  // ==================== FCM ====================
+
+  Future<void> saveFcmToken(String token) async {
+    try {
+      await _dio.post('/api/user/fcm-token', data: {'token': token});
+      print('[FCM] ✅ Token tersimpan ke server');
+    } catch (e) {
+      print('[FCM] ❌ Gagal simpan token: ${errorMessage(e)}');
+    }
+  }
+
+  Future<void> deleteFcmToken() async {
+    try {
+      await _dio.delete('/api/user/fcm-token');
+      print('[FCM] ✅ Token dihapus dari server');
+    } catch (e) {
+      print('[FCM] ❌ Gagal hapus token: ${errorMessage(e)}');
+    }
   }
 }

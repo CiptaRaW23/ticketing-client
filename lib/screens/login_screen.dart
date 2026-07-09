@@ -6,6 +6,7 @@ import '../services/socket_service.dart';
 import 'main_navigation.dart';
 import 'register_screen.dart';
 import '/technician/technician_navigation.dart';
+import '../services/notification_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -57,6 +58,13 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('userName', userName);
         await prefs.setInt('userId', userId);
         await prefs.setString('userRole', userRole);
+
+        // Simpan FCM token ke server
+        final fcmToken = await NotificationService.getToken();
+        if (fcmToken != null) {
+          await prefs.setString('fcmToken', fcmToken);
+          await _api.saveFcmToken(fcmToken);
+        }
 
         SocketService().init();
         if (!mounted) return;

@@ -88,6 +88,7 @@ class _TechnicianProfileScreenState extends State<TechnicianProfileScreen> {
     );
     if (!ok || !mounted) return;
 
+    await _api.deleteFcmToken();
     SocketService().disconnect();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

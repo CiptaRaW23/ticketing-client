@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'technician/technician_navigation.dart';
 import 'services/socket_service.dart';
+import 'services/notification_service.dart';
 
-void main() {
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await NotificationService.showFromRemoteMessage(message);
+}
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SocketService().init();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   runApp(const MyApp());
 }
 
+// Sisa MyApp dan SplashCheck tetap sama persis
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -41,10 +53,19 @@ class SplashCheck extends StatefulWidget {
 }
 
 class _SplashCheckState extends State<SplashCheck> {
+  Future<void> _initServices() async {
+    await NotificationService.init();
+    SocketService().init();
+  }
+
   @override
   void initState() {
     super.initState();
-    _checkLogin();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initServices();
+      _checkLogin();
+    });
   }
 
   Future<void> _checkLogin() async {
